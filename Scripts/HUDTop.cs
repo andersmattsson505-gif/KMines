@@ -77,7 +77,7 @@ namespace KMines
             bgRT.anchorMax = Vector2.one;
             bgRT.offsetMin = Vector2.zero;
             bgRT.offsetMax = Vector2.zero;
-            bg.GetComponent<Image>().color = topBarColor;
+            bg.GetComponent<Image>().color = new color(0,0,0,0);
 
             // MENU
             {
@@ -256,3 +256,4 @@ namespace KMines
         }
     }
 }
+
