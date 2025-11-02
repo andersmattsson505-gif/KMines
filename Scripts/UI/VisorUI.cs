@@ -1,11 +1,10 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.UI;
 
 namespace KMines
 {
     /// <summary>
-    /// Visor-knapp uppe t.h. + "xN".
-    /// Safe-area med robust konvertering px -> canvas units.
+    /// Äldre/auto visor-knapp. NU: stänger av sig om HUDTop finns.
     /// </summary>
     [DefaultExecutionOrder(25000)]
     public class VisorUI : MonoBehaviour
@@ -27,7 +26,6 @@ namespace KMines
         public VisorScanEffect scanEffect;
 
         Canvas canvas;
-        RectTransform rootRT;
         RectTransform buttonRT;
         Image iconImage;
         Text countText;
@@ -35,18 +33,24 @@ namespace KMines
 
         Rect lastSafe = Rect.zero;
         float lastScale = -1f;
-
         bool built;
 
         void Awake()
         {
+            // om nya HUDen redan finns → den visar visor → stäng denna
+            if (FindObjectOfType<HUDTop>() != null)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
             runtimeFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         }
 
         void Start()
         {
             BuildIfNeeded();
-            ApplySafeArea(); // placera direkt
+            ApplySafeArea();
         }
 
         void BuildIfNeeded()
@@ -65,16 +69,16 @@ namespace KMines
 
             gameObject.AddComponent<GraphicRaycaster>();
 
-            rootRT = canvas.GetComponent<RectTransform>();
+            // root
+            var rootRT = canvas.GetComponent<RectTransform>();
             rootRT.anchorMin = Vector2.zero;
             rootRT.anchorMax = Vector2.one;
             rootRT.offsetMin = Vector2.zero;
             rootRT.offsetMax = Vector2.zero;
 
-            // Knapp
+            // button
             var btnGO = new GameObject("VisorButton");
             btnGO.transform.SetParent(rootRT, false);
-
             buttonRT = btnGO.AddComponent<RectTransform>();
             buttonRT.sizeDelta = new Vector2(iconSize, iconSize);
             buttonRT.anchorMin = new Vector2(1f, 1f);
@@ -83,17 +87,15 @@ namespace KMines
 
             iconImage = btnGO.AddComponent<Image>();
             iconImage.raycastTarget = true;
-            if (visorSprite == null)
-                visorSprite = Resources.Load<Sprite>("Art/visor_pulse");
+            if (visorSprite == null) visorSprite = Resources.Load<Sprite>("Art/visor_pulse");
             iconImage.sprite = visorSprite;
 
             var button = btnGO.AddComponent<Button>();
             button.onClick.AddListener(OnVisorClicked);
 
-            // Count text nertill höger om ikonen
+            // Count text
             var textGO = new GameObject("CountText");
             textGO.transform.SetParent(buttonRT, false);
-
             var textRT = textGO.AddComponent<RectTransform>();
             textRT.anchorMin = new Vector2(1f, 0f);
             textRT.anchorMax = new Vector2(1f, 0f);
@@ -113,7 +115,6 @@ namespace KMines
         {
             if (!built) return;
 
-            // Replacera om safe-area eller scale ändras
             if (Screen.safeArea != lastSafe || canvas.scaleFactor != lastScale)
                 ApplySafeArea();
 
@@ -129,16 +130,14 @@ namespace KMines
         {
             if (canvas == null || buttonRT == null) return;
 
-            Rect safe = Screen.safeArea;   // device px
-            float s = canvas.scaleFactor;  // px -> canvas units
+            Rect safe = Screen.safeArea;
+            float s = canvas.scaleFactor;
 
             float rightPad = (Screen.width - safe.xMax) / s;
             float topPad = (Screen.height - safe.yMax) / s;
 
-            buttonRT.anchoredPosition = new Vector2(
-                -(rightPad + positionXFromRight),
-                -(topPad + positionYFromTop)
-            );
+            buttonRT.anchoredPosition = new Vector2(-(rightPad + positionXFromRight),
+                                                    -(topPad + positionYFromTop));
 
             lastSafe = safe;
             lastScale = s;
@@ -147,10 +146,16 @@ namespace KMines
         void OnVisorClicked()
         {
             bool ok = PlayerInventory.TryConsumePulseVisor();
-            if (!ok) { Debug.Log("[VisorUI] No visor charges left."); return; }
+            if (!ok)
+            {
+                Debug.Log("[VisorUI] No visor charges left.");
+                return;
+            }
 
-            if (scanEffect != null) scanEffect.PulseRadarSweep();
-            else Debug.LogWarning("[VisorUI] No VisorScanEffect assigned.");
+            if (scanEffect != null)
+                scanEffect.PulseRadarSweep();
+            else
+                Debug.LogWarning("[VisorUI] No VisorScanEffect assigned.");
         }
     }
 }
