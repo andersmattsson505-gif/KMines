@@ -108,9 +108,9 @@ namespace KMines
             TryAssignBoard(hud, board);
 
             // --- Missile UI (hörn) ---
-            var missileUiGO = new GameObject("UI_Missile");
-            var missileUI = missileUiGO.AddComponent<MissileUI>();
-            TryAssignBoard(missileUI, board);
+            // var missileUiGO = new GameObject("UI_Missile");
+            // var missileUI = missileUiGO.AddComponent<MissileUI>();
+            // TryAssignBoard(missileUI, board);
 
             // --- Visor Scan Effect ---
             var visorScanGO = new GameObject("VisorScanEffect");
@@ -118,11 +118,11 @@ namespace KMines
             visorScan.board = board;
 
             // --- Visor UI ---
-            var visorUiGO = new GameObject("UI_Visor");
-            var visorUI = visorUiGO.AddComponent<VisorUI>();
-            visorUI.positionXFromRight = 250f;
-            visorUI.positionYFromTop = 40f;
-            visorUI.scanEffect = visorScan;
+            // var visorUiGO = new GameObject("UI_Visor");
+            // var visorUI = visorUiGO.AddComponent<VisorUI>();
+            // visorUI.positionXFromRight = 250f;
+            // visorUI.positionYFromTop = 40f;
+            // visorUI.scanEffect = visorScan;
 
             // --- DEFAULT LEVEL DATA om LevelLoader saknar levels ---
             if (loader.levels == null || loader.levels.Length == 0)
@@ -192,8 +192,9 @@ namespace KMines
                     }
                 case GameModeType.Arcade:
                     {
-                        int w = cfg.useCustomBoardSize ? cfg.customWidth : arcadeWidth;
-                        int h = cfg.useCustomBoardSize ? cfg.customHeight : arcadeHeight;
+                        // tvinga vår teststorlek oavsett sparad config
+                        int w = 8;
+                        int h = 14;
                         float dens = cfg.useCustomBoardSize ? cfg.customMineDensity : arcadeMineDensity;
 
                         var arc = new LevelDef
