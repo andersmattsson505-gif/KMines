@@ -1,4 +1,3 @@
-
 using UnityEngine;
 
 namespace KMines
@@ -47,7 +46,6 @@ namespace KMines
             mr  = GetComponent<MeshRenderer>();
             col = GetComponent<Collider>();
 
-            // 1) välj en shader som ALLTID finns i build
             Shader sh = Shader.Find("Unlit/Texture");
             if (sh == null) sh = Shader.Find("Sprites/Default");
             if (sh == null) sh = Shader.Find("UI/Default");
@@ -60,17 +58,13 @@ namespace KMines
             }
             mr.sharedMaterial = mat;
             mr.enabled = true;
-
-            // 🔺 Rita efter bakgrunden
             mr.sharedMaterial.renderQueue = 2450;
 
-            // 🔺 Se till att den ligger på samma layer som board (mobila kameran kan culla custom layers)
             if (owner != null)
                 gameObject.layer = owner.gameObject.layer;
             else
-                gameObject.layer = 0; // Default
+                gameObject.layer = 0;
 
-            // större träffyta
             BoxCollider box = col as BoxCollider;
             if (box == null) box = gameObject.AddComponent<BoxCollider>();
             box.size   = new Vector3(1.35f, 0.4f, 1.35f);
@@ -165,6 +159,14 @@ namespace KMines
                     textGO.SetActive(true);
                 }
             }
+        }
+
+        // ← NYTT: Board.ToggleFlagAt(...) behöver detta
+        public void SetFlag(bool on)
+        {
+            // just nu: visa ring som “flagga”
+            if (ringSR)
+                ringSR.enabled = on;
         }
     }
 }
