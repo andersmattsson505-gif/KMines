@@ -46,6 +46,7 @@ namespace KMines
             mr  = GetComponent<MeshRenderer>();
             col = GetComponent<Collider>();
 
+            // 1) välj en shader som ALLTID finns i build
             Shader sh = Shader.Find("Unlit/Texture");
             if (sh == null) sh = Shader.Find("Sprites/Default");
             if (sh == null) sh = Shader.Find("UI/Default");
@@ -58,16 +59,22 @@ namespace KMines
             }
             mr.sharedMaterial = mat;
             mr.enabled = true;
+
+            // Rita efter bakgrunden
             mr.sharedMaterial.renderQueue = 2450;
 
+            // Lägg på samma layer som board
             if (owner != null)
                 gameObject.layer = owner.gameObject.layer;
             else
                 gameObject.layer = 0;
 
+            // 🔴 VIKTIGT: träffyta får inte vara större än rutan → annars klickar man på cellen under
             BoxCollider box = col as BoxCollider;
             if (box == null) box = gameObject.AddComponent<BoxCollider>();
-            box.size   = new Vector3(1.35f, 0.4f, 1.35f);
+
+            float hitSize = Mathf.Max(0.9f, tileSize * 0.98f);   // 98% av rutan, aldrig mindre än 0.9
+            box.size   = new Vector3(hitSize, 0.4f, hitSize);
             box.center = Vector3.zero;
 
             // ring
@@ -159,14 +166,6 @@ namespace KMines
                     textGO.SetActive(true);
                 }
             }
-        }
-
-        // ← NYTT: Board.ToggleFlagAt(...) behöver detta
-        public void SetFlag(bool on)
-        {
-            // just nu: visa ring som “flagga”
-            if (ringSR)
-                ringSR.enabled = on;
         }
     }
 }
