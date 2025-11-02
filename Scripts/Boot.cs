@@ -63,11 +63,10 @@ namespace KMines
 
             // --- BOARD ---
             var boardGO = new GameObject("Board");
-            // lite ner så vi får plats med top-bar
             boardGO.transform.position = new Vector3(0f, 0f, -0.8f);
             var board = boardGO.AddComponent<Board>();
 
-            // --- GAME UI (win/lose) ---
+            // --- GAME UI ---
             var uiGO = new GameObject("GameUI");
             var gameUI = uiGO.AddComponent<GameUI>();
             gameUI.SetBoard(board);
@@ -77,14 +76,14 @@ namespace KMines
             var loader = loaderObj.AddComponent<LevelLoader>();
             loader.board = board;
 
-            // --- WIN/LOSE MANAGER ---
+            // --- WIN/LOSE ---
             var rulesGO = new GameObject("WinLoseManager");
             var rules = rulesGO.AddComponent<WinLoseManager>();
             rules.board = board;
             rules.gameUI = gameUI;
             rules.levelLoader = loader;
 
-            // --- TIMER UI + TIMER LOGIC ---
+            // --- TIMER UI + TIMER ---
             var timerUiGO = new GameObject("TimerUI");
             timerUiGO.AddComponent<TimerUIPlacement>();
             var timerUI = timerUiGO.AddComponent<TimerUI>();
@@ -103,7 +102,7 @@ namespace KMines
             smart.cam = cam;
             smart.rules = rules;
 
-            // --- GAMLA HUD:en (behövs för vissa script) ---
+            // --- GAMLA HUD ---
             var hudGO = new GameObject("KaelenHUD");
             var hud = hudGO.AddComponent<KaelenHUD>();
             TryAssignBoard(hud, board);
@@ -141,7 +140,6 @@ namespace KMines
             hudTopRT.anchorMin = new Vector2(0f, 1f);
             hudTopRT.anchorMax = new Vector2(1f, 1f);
             hudTopRT.pivot = new Vector2(0.5f, 1f);
-            // högre topp för mobil
             hudTopRT.offsetMin = new Vector2(0f, -140f);
             hudTopRT.offsetMax = new Vector2(0f, 0f);
             var hudTop = hudTopGO.AddComponent<HUDTop>();
@@ -149,19 +147,19 @@ namespace KMines
             hudTop.loader = loader;
             hudTop.gameTimer = gameTimer;
             hudTop.gameUI = gameUI;
-            hudTop.topBarHeight = 140f;   // så HUDTop vet samma siffra
+            hudTop.topBarHeight = 140f;
 
-            // --- Visor Scan Effect ---
+            // --- VisorScanEffect ---
             var visorScanGO = new GameObject("VisorScanEffect");
             var visorScan = visorScanGO.AddComponent<VisorScanEffect>();
             visorScan.board = board;
             hudTop.scanEffect = visorScan;
 
-            // --- TimerUI in i canvas ---
+            // --- Timer UI till canvas ---
             timerUiGO.transform.SetParent(targetCanvas.transform, false);
             timerUiGO.transform.SetAsLastSibling();
 
-            // --- OM INGA LEVELS: skapa 1 default ---
+            // --- OM INGA LEVELS ---
             if (loader.levels == null || loader.levels.Length == 0)
             {
                 loader.levels = new LevelDef[1];
@@ -177,7 +175,7 @@ namespace KMines
                 loader.currentIndex = 0;
             }
 
-            // --- LÄS KONFIG FRÅN MENY ---
+            // --- LÄS CONFIG ---
             GameSessionConfig cfg;
             if (GameModeSettings.hasConfig)
             {
@@ -202,7 +200,6 @@ namespace KMines
                 };
             }
 
-            // --- TEMA ---
             string finalTheme = cfg.tilesetTheme;
             if (cfg.mode == GameModeType.Arcade &&
                 (string.IsNullOrEmpty(finalTheme) || finalTheme == "random"))
@@ -216,19 +213,22 @@ namespace KMines
             board.gameTimer = gameTimer;
             board.bonusPerSafeReveal = cfg.timeBonusPerSafeReveal;
 
-            // --- LÄGE ---
+            float tileSizeThisDevice = defaultTileSize;
+            if (Application.isMobilePlatform)
+                tileSizeThisDevice = 0.8f;
+
             switch (cfg.mode)
             {
                 case GameModeType.Campaign:
                     {
                         int li = Mathf.Clamp(cfg.levelIndex, 0, loader.levels.Length - 1);
+                        loader.levels[li].tileSize = tileSizeThisDevice;
                         loader.currentIndex = li;
                         loader.LoadLevel(li);
                         break;
                     }
                 case GameModeType.Arcade:
                     {
-                        // vi tvingar 8x14 här
                         int w = 8;
                         int h = 14;
                         float dens = cfg.useCustomBoardSize ? cfg.customMineDensity : arcadeMineDensity;
@@ -237,7 +237,7 @@ namespace KMines
                         {
                             width = w,
                             height = h,
-                            tileSize = defaultTileSize,
+                            tileSize = tileSizeThisDevice,
                             mineDensity = dens,
                             timed = cfg.timed,
                             timeLimitSeconds = cfg.timeLimitSeconds
@@ -260,7 +260,7 @@ namespace KMines
                         {
                             width = bossWidth,
                             height = bossHeight,
-                            tileSize = defaultTileSize,
+                            tileSize = tileSizeThisDevice,
                             mineDensity = bossMineDensity,
                             timed = true,
                             timeLimitSeconds = (cfg.timeLimitSeconds > 0f ? cfg.timeLimitSeconds : bossTimeLimitSeconds)
@@ -278,7 +278,7 @@ namespace KMines
                     }
             }
 
-            // --- WORLD BG (metall bakom brädet) ---
+            // --- WORLD BG ---
             {
                 float wUnits = board.width * board.tileSize;
                 float hUnits = board.height * board.tileSize;
@@ -299,27 +299,40 @@ namespace KMines
                 var mr = quad.GetComponent<MeshRenderer>();
                 var mat = new Material(Shader.Find("Unlit/Texture"));
                 if (spr) mat.mainTexture = spr.texture;
-
                 mat.renderQueue = 1000;
                 mr.sharedMaterial = mat;
             }
 
             // --- VIEWPORT FITTER ---
-            var fitGO = new GameObject("ViewportFitter");
-            var fitter = fitGO.AddComponent<BoardViewportFitter>();
+            var fitter = FindObjectOfType<BoardViewportFitter>();
+            if (fitter == null)
+            {
+                var fitGO = new GameObject("ViewportFitter");
+                fitter = fitGO.AddComponent<BoardViewportFitter>();
+            }
+
             fitter.cam = cam;
             fitter.board = board;
-
-            // vi vet att vi satte 140 px på HUDTop
             fitter.uiTopPx = 140f;
-            fitter.uiLeftPx = 68f;
-            fitter.uiRightPx = 68f;
+            fitter.uiLeftPx = 80f;
+            fitter.uiRightPx = 80f;
             fitter.uiBottomPx = 0f;
-
             fitter.referenceResolution = new Vector2(1080f, 1920f);
-            // mer luft för mobil
-            fitter.extraWorldPadding = 0.40f;
+            fitter.portraitAspectThreshold = 0f;
+            fitter.viewportShrink = 0.85f;
+            fitter.extraWorldPadding = 0.35f;
             fitter.updateEveryFrame = true;
+
+            // MOBIL: mindre zoom, men lite större sid-marginal
+            if (Application.isMobilePlatform)
+            {
+                // öka kanten så cellerna inte nuddar skärmen
+                fitter.uiLeftPx = 48f;
+                fitter.uiRightPx = 48f;
+                // nästan ingen extra shrink – vi vill bara lämna kanten
+                fitter.viewportShrink = 0.98f;
+            }
+
             fitter.FitNow();
         }
 
