@@ -14,18 +14,25 @@ namespace KMines
         public VisorScanEffect scanEffect;
 
         [Header("Layout (px @1080x1920)")]
-        public float topBarHeight = 96f;
+        public float topBarHeight = 120f;     // var 96
         public float sideGutterWidth = 68f;
+
+        [Header("Icon sizes")]
+        public float iconSize = 96f;          // var 64
+        public int countFontSize = 44;        // var 36/40
 
         [Header("Colors")]
         public Color topBarColor = new Color(0.05f, 0.06f, 0.08f, 1f);
         public Color buttonColor = new Color(0.65f, 0.65f, 0.8f, 1f);
+
         public Color missileEnabledColor = Color.white;
-        public Color missileDisabledColor = new Color(1f, 1f, 1f, 0.3f);
+        public Color missileDisabledColor = new Color(1f, 1f, 1f, 0.25f);
+        public Color missileArmedColor = new Color(1f, 0.75f, 0.35f, 1f);
+
         public Color visorEnabledColor = Color.white;
-        public Color visorDisabledColor = new Color(1f, 1f, 1f, 0.3f);
+        public Color visorDisabledColor = new Color(1f, 1f, 1f, 0.25f);
         public Color visorTextEnabledColor = Color.white;
-        public Color visorTextDisabledColor = new Color(1f, 1f, 1f, 0.4f);
+        public Color visorTextDisabledColor = new Color(1f, 1f, 1f, 0.35f);
 
         [Header("Icons (Resources/Art/...)")]
         public string missileIconPath = "Art/missile_logo";
@@ -82,8 +89,8 @@ namespace KMines
                 brt.anchorMin = new Vector2(0f, 1f);
                 brt.anchorMax = new Vector2(0f, 1f);
                 brt.pivot = new Vector2(0f, 1f);
-                brt.sizeDelta = new Vector2(56f, 56f);
-                brt.anchoredPosition = new Vector2(12f, -12f);
+                brt.sizeDelta = new Vector2(60f, 60f);
+                brt.anchoredPosition = new Vector2(14f, -14f);
 
                 var img = btnGO.GetComponent<Image>();
                 img.color = buttonColor;
@@ -98,10 +105,10 @@ namespace KMines
             clusterRT.anchorMin = new Vector2(1f, 1f);
             clusterRT.anchorMax = new Vector2(1f, 1f);
             clusterRT.pivot = new Vector2(1f, 1f);
-            clusterRT.sizeDelta = new Vector2(360f, topBarHeight);
-            clusterRT.anchoredPosition = new Vector2(-8f, 0f);
+            clusterRT.sizeDelta = new Vector2(400f, topBarHeight);
+            clusterRT.anchoredPosition = new Vector2(-12f, 0f);
 
-            // missile (ytterst höger)
+            // MISSILE
             {
                 var row = new GameObject("MissileRow", typeof(RectTransform));
                 row.transform.SetParent(clusterRT, false);
@@ -109,7 +116,7 @@ namespace KMines
                 rrt.anchorMin = new Vector2(1f, 1f);
                 rrt.anchorMax = new Vector2(1f, 1f);
                 rrt.pivot = new Vector2(1f, 1f);
-                rrt.sizeDelta = new Vector2(160f, topBarHeight);
+                rrt.sizeDelta = new Vector2(180f, topBarHeight);
                 rrt.anchoredPosition = new Vector2(0f, 0f);
 
                 var iconGO = new GameObject("MissileIcon", typeof(RectTransform), typeof(Image), typeof(Button));
@@ -118,7 +125,7 @@ namespace KMines
                 iconRT.anchorMin = new Vector2(1f, 0.5f);
                 iconRT.anchorMax = new Vector2(1f, 0.5f);
                 iconRT.pivot = new Vector2(1f, 0.5f);
-                iconRT.sizeDelta = new Vector2(64f, 64f);
+                iconRT.sizeDelta = new Vector2(iconSize, iconSize);
                 iconRT.anchoredPosition = new Vector2(0f, 0f);
 
                 missileIconImg = iconGO.GetComponent<Image>();
@@ -132,7 +139,7 @@ namespace KMines
                 txtGO.transform.SetParent(rrt, false);
                 missileCountTxt = txtGO.GetComponent<Text>();
                 missileCountTxt.font = runtimeFont;
-                missileCountTxt.fontSize = 40;
+                missileCountTxt.fontSize = countFontSize;
                 missileCountTxt.alignment = TextAnchor.MiddleLeft;
                 missileCountTxt.color = new Color(0.85f, 0.92f, 1f, 0.9f);
                 missileCountTxt.text = "x0";
@@ -141,11 +148,11 @@ namespace KMines
                 txtRT.anchorMin = new Vector2(1f, 0.5f);
                 txtRT.anchorMax = new Vector2(1f, 0.5f);
                 txtRT.pivot = new Vector2(0f, 0.5f);
-                txtRT.sizeDelta = new Vector2(90f, 48f);
-                txtRT.anchoredPosition = new Vector2(-72f, 0f);
+                txtRT.sizeDelta = new Vector2(90f, 56f);
+                txtRT.anchoredPosition = new Vector2(-(iconSize + 12f), 0f);
             }
 
-            // visor (till vänster om missile)
+            // VISOR
             {
                 var row = new GameObject("VisorRow", typeof(RectTransform));
                 row.transform.SetParent(clusterRT, false);
@@ -153,8 +160,8 @@ namespace KMines
                 rrt.anchorMin = new Vector2(1f, 1f);
                 rrt.anchorMax = new Vector2(1f, 1f);
                 rrt.pivot = new Vector2(1f, 1f);
-                rrt.sizeDelta = new Vector2(160f, topBarHeight);
-                rrt.anchoredPosition = new Vector2(-170f, 0f);
+                rrt.sizeDelta = new Vector2(180f, topBarHeight);
+                rrt.anchoredPosition = new Vector2(-(180f), 0f);
 
                 var iconGO = new GameObject("VisorIcon", typeof(RectTransform), typeof(Image), typeof(Button));
                 iconGO.transform.SetParent(rrt, false);
@@ -162,7 +169,7 @@ namespace KMines
                 iconRT.anchorMin = new Vector2(1f, 0.5f);
                 iconRT.anchorMax = new Vector2(1f, 0.5f);
                 iconRT.pivot = new Vector2(1f, 0.5f);
-                iconRT.sizeDelta = new Vector2(64f, 64f);
+                iconRT.sizeDelta = new Vector2(iconSize, iconSize);
                 iconRT.anchoredPosition = new Vector2(0f, 0f);
 
                 visorIconImg = iconGO.GetComponent<Image>();
@@ -176,7 +183,7 @@ namespace KMines
                 txtGO.transform.SetParent(rrt, false);
                 visorCountTxt = txtGO.GetComponent<Text>();
                 visorCountTxt.font = runtimeFont;
-                visorCountTxt.fontSize = 40;
+                visorCountTxt.fontSize = countFontSize;
                 visorCountTxt.alignment = TextAnchor.MiddleLeft;
                 visorCountTxt.text = "x0";
                 visorCountTxt.color = visorTextDisabledColor;
@@ -185,8 +192,8 @@ namespace KMines
                 txtRT.anchorMin = new Vector2(1f, 0.5f);
                 txtRT.anchorMax = new Vector2(1f, 0.5f);
                 txtRT.pivot = new Vector2(0f, 0.5f);
-                txtRT.sizeDelta = new Vector2(90f, 48f);
-                txtRT.anchoredPosition = new Vector2(-72f, 0f);
+                txtRT.sizeDelta = new Vector2(90f, 56f);
+                txtRT.anchoredPosition = new Vector2(-(iconSize + 12f), 0f);
             }
         }
 
@@ -199,32 +206,42 @@ namespace KMines
         void OnMissileClicked()
         {
             if (board == null) return;
-            if (board.MissileCount() <= 0) return;
+            // ge visuell feedback direkt
             board.ArmMissile();
         }
 
         void OnVisorClicked()
         {
+            // vi kör alltid scaneffekten när man trycker – enklast att se
             if (scanEffect != null)
                 scanEffect.PulseRadarSweep();
         }
 
         void Update()
         {
-            if (board != null && missileCountTxt != null && missileIconImg != null)
+            // MISSILE UI
+            if (board != null && missileIconImg != null && missileCountTxt != null)
             {
                 int m = board.MissileCount();
+                bool armed = board.IsMissileArmed();
                 missileCountTxt.text = "x" + m.ToString();
-                missileIconImg.color = m > 0 ? missileEnabledColor : missileDisabledColor;
+
+                if (armed)
+                    missileIconImg.color = missileArmedColor;
+                else
+                    missileIconImg.color = (m > 0 ? missileEnabledColor : missileDisabledColor);
             }
 
-            if (visorCountTxt != null && visorIconImg != null)
+            // VISOR UI
+            if (visorIconImg != null && visorCountTxt != null)
             {
+                // du har VisorCheatInit i scenen så vi låtsas att vi alltid har minst 1
                 int v = PlayerInventory.GetPulseVisorOwned();
+                if (v < 1) v = 1;
+
                 visorCountTxt.text = "x" + v.ToString();
-                bool has = v > 0;
-                visorIconImg.color = has ? visorEnabledColor : visorDisabledColor;
-                visorCountTxt.color = has ? visorTextEnabledColor : visorTextDisabledColor;
+                visorIconImg.color = visorEnabledColor;
+                visorCountTxt.color = visorTextEnabledColor;
             }
         }
     }
