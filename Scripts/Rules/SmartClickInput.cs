@@ -1,5 +1,5 @@
 using UnityEngine;
-
+using UnityEngine.EventSystems;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
@@ -52,14 +52,17 @@ namespace KMines
             bool touchDown = touch != null && touch.primaryTouch.press.isPressed;
             bool mouseDown = mouse != null && mouse.leftButton.isPressed;
 
+            // START PRESS
             if (!isPressing && (touchDown || (mouse != null && mouse.leftButton.wasPressedThisFrame)))
             {
+                // UI-block – klicka inte igenom på HUD/missil/restart
+                if (IsPointerOverUI(touchDown ? (int?)touch.primaryTouch.touchId.ReadValue() : null))
+                    return;
+
                 isPressing = true;
                 pressTimer = 0f;
                 longPressFired = false;
-                pressScreenPos = touchDown
-                    ? touch.primaryTouch.position.ReadValue()
-                    : mouse.position.ReadValue();
+                pressScreenPos = touchDown ? touch.primaryTouch.position.ReadValue() : mouse.position.ReadValue();
                 return;
             }
 
@@ -67,6 +70,7 @@ namespace KMines
             {
                 pressTimer += Time.deltaTime;
 
+                // long press -> flag
                 if (!longPressFired && pressTimer >= longPressTime)
                 {
                     longPressFired = true;
@@ -74,7 +78,6 @@ namespace KMines
                 }
 
                 bool stillDown = touchDown || mouseDown;
-
                 if (!stillDown)
                 {
                     if (!longPressFired)
@@ -92,6 +95,10 @@ namespace KMines
         {
             if (Input.GetMouseButtonDown(0))
             {
+                // UI-block
+                if (IsPointerOverUI(null))
+                    return;
+
                 isPressing = true;
                 pressTimer = 0f;
                 longPressFired = false;
@@ -120,17 +127,31 @@ namespace KMines
             }
         }
 
+        bool IsPointerOverUI(int? touchId)
+        {
+            if (EventSystem.current == null)
+                return false;
+
+            if (touchId.HasValue)
+                return EventSystem.current.IsPointerOverGameObject(touchId.Value);
+
+            return EventSystem.current.IsPointerOverGameObject();
+        }
+
         void DoPrimaryAt(Vector2 screenPos)
         {
             if (cam == null || target == null) return;
+
+            // extra-säker: blocka även här om vi ändå träffar UI
+            if (IsPointerOverUI(null)) return;
+
             if (!ScreenToBoardHitExpanded(screenPos, touchTolerancePx, out Vector3 hitPos))
                 return;
 
             if (target.IsMissileArmed())
             {
                 target.UseMissileAt(hitPos);
-                if (rules != null)
-                    rules.BeginMissileGrace(0.25f);
+                if (rules != null) rules.BeginMissileGrace(0.25f);
             }
             else
             {
@@ -143,7 +164,6 @@ namespace KMines
             if (cam == null || target == null) return;
             if (!ScreenToBoardHitExpanded(screenPos, touchTolerancePx, out Vector3 hitPos))
                 return;
-
             target.ToggleFlagAt(hitPos);
         }
 
@@ -157,14 +177,10 @@ namespace KMines
 
             Vector2[] offs =
             {
-                new Vector2(+padPx, 0),
-                new Vector2(-padPx, 0),
-                new Vector2(0, +padPx),
-                new Vector2(0, -padPx),
-                new Vector2(+padPx, +padPx),
-                new Vector2(-padPx, +padPx),
-                new Vector2(+padPx, -padPx),
-                new Vector2(-padPx, -padPx),
+                new Vector2(+padPx, 0), new Vector2(-padPx, 0),
+                new Vector2(0, +padPx), new Vector2(0, -padPx),
+                new Vector2(+padPx, +padPx), new Vector2(-padPx, +padPx),
+                new Vector2(+padPx, -padPx), new Vector2(-padPx, -padPx),
             };
 
             foreach (var o in offs)
