@@ -6,14 +6,14 @@ namespace KMines
     [DefaultExecutionOrder(10000)]
     public class HUDTop : MonoBehaviour
     {
-        [Header("Auto-wired if empty (Boot fyller i, men vi fallbackar med FindObjectOfType)")]
+        [Header("Auto-wired")]
         public Board board;
         public LevelLoader loader;
         public GameTimer gameTimer;
         public GameUI gameUI;
         public VisorScanEffect scanEffect;
 
-        [Header("Layout (px @1080x1920 ref)")]
+        [Header("Layout (px @1080x1920)")]
         public float topBarHeight = 88f;
         public float sideGutterWidth = 68f;
 
@@ -62,39 +62,31 @@ namespace KMines
             BuildHUD();
         }
 
-        // -----------------------
-        // BUILD
-        // -----------------------
         void BuildHUD()
         {
-            // Canvas-root (detta gameobjectet)
-            rootRT = GetComponent<RectTransform>();
-            if (!rootRT)
-                rootRT = gameObject.AddComponent<RectTransform>();
-
+            // root
+            rootRT = GetComponent<RectTransform>() ?? gameObject.AddComponent<RectTransform>();
             rootRT.anchorMin = new Vector2(0f, 1f);
             rootRT.anchorMax = new Vector2(1f, 1f);
             rootRT.pivot = new Vector2(0.5f, 1f);
             rootRT.offsetMin = new Vector2(0f, -topBarHeight);
             rootRT.offsetMax = new Vector2(0f, 0f);
 
-            // ---------- Top bar background ----------
+            // top bar bg
             {
                 var go = new GameObject("TopBar");
                 go.transform.SetParent(rootRT, false);
-
                 topBarRT = go.AddComponent<RectTransform>();
                 topBarRT.anchorMin = new Vector2(0f, 0f);
                 topBarRT.anchorMax = new Vector2(1f, 1f);
                 topBarRT.pivot = new Vector2(0.5f, 0.5f);
                 topBarRT.offsetMin = new Vector2(0f, -topBarHeight);
                 topBarRT.offsetMax = new Vector2(0f, 0f);
-
                 var img = go.AddComponent<Image>();
                 img.color = topBarColor;
             }
 
-            // ---------- Left gutter (hamburger) ----------
+            // left (menu)
             {
                 var go = new GameObject("LeftGutter");
                 go.transform.SetParent(rootRT, false);
@@ -104,26 +96,23 @@ namespace KMines
                 leftGutterRT.anchorMax = new Vector2(0f, 1f);
                 leftGutterRT.pivot = new Vector2(0f, 1f);
                 leftGutterRT.sizeDelta = new Vector2(sideGutterWidth, 0f);
-                leftGutterRT.anchoredPosition = new Vector2(0f, 0f);
+                leftGutterRT.anchoredPosition = Vector2.zero;
 
                 var btnGO = new GameObject("MenuButton", typeof(Image), typeof(Button));
                 btnGO.transform.SetParent(leftGutterRT, false);
-
                 var btnRT = btnGO.GetComponent<RectTransform>();
                 btnRT.anchorMin = new Vector2(0f, 1f);
                 btnRT.anchorMax = new Vector2(0f, 1f);
                 btnRT.pivot = new Vector2(0f, 1f);
                 btnRT.sizeDelta = new Vector2(48f, 48f);
                 btnRT.anchoredPosition = new Vector2(12f, -12f);
-
                 var img = btnGO.GetComponent<Image>();
                 img.color = buttonColor;
-
                 var btn = btnGO.GetComponent<Button>();
                 btn.onClick.AddListener(OnMenuClicked);
             }
 
-            // ---------- Right cluster (missile + visor) ----------
+            // right cluster (missile + visor)
             {
                 var go = new GameObject("RightCluster");
                 go.transform.SetParent(rootRT, false);
@@ -135,7 +124,7 @@ namespace KMines
                 rightClusterRT.sizeDelta = new Vector2(280f, 0f);
                 rightClusterRT.anchoredPosition = new Vector2(-12f, 0f);
 
-                // ----- Missile row -----
+                // MISSILE
                 {
                     var row = new GameObject("MissileRow").AddComponent<RectTransform>();
                     row.transform.SetParent(rightClusterRT, false);
@@ -155,11 +144,9 @@ namespace KMines
                     mBtnRT.anchoredPosition = new Vector2(0f, 0f);
 
                     missileIconImg = mBtnGO.GetComponent<Image>();
-                    missileIconImg.raycastTarget = true;
                     missileIconImg.preserveAspect = true;
-                    var missileSprite = Resources.Load<Sprite>(missileIconPath);
-                    if (missileSprite != null)
-                        missileIconImg.sprite = missileSprite;
+                    var sp = Resources.Load<Sprite>(missileIconPath);
+                    if (sp) missileIconImg.sprite = sp;
 
                     missileButton = mBtnGO.GetComponent<Button>();
                     missileButton.onClick.AddListener(OnMissileClicked);
@@ -178,18 +165,16 @@ namespace KMines
                     txtRT.anchorMax = new Vector2(1f, 1f);
                     txtRT.pivot = new Vector2(1f, 1f);
                     txtRT.sizeDelta = new Vector2(120f, 32f);
-                    // nära ikonen
                     txtRT.anchoredPosition = new Vector2(-8f, 0f);
                 }
 
-                // ----- Visor row -----
+                // VISOR – samma höjd, lite längre åt vänster
                 {
                     var row = new GameObject("VisorRow").AddComponent<RectTransform>();
                     row.transform.SetParent(rightClusterRT, false);
                     row.anchorMin = new Vector2(1f, 1f);
                     row.anchorMax = new Vector2(1f, 1f);
                     row.pivot = new Vector2(1f, 1f);
-                    // lägg på samma höjd men längre åt vänster
                     row.anchoredPosition = new Vector2(-140f, 0f);
                     row.sizeDelta = new Vector2(240f, 32f);
 
@@ -203,19 +188,15 @@ namespace KMines
                     vBtnRT.anchoredPosition = new Vector2(0f, 0f);
 
                     visorIconImg = vBtnGO.GetComponent<Image>();
-                    visorIconImg.raycastTarget = true;
                     visorIconImg.preserveAspect = true;
-
-                    var visorSprite = Resources.Load<Sprite>(visorIconPath);
-                    if (visorSprite != null)
-                        visorIconImg.sprite = visorSprite;
+                    var vsp = Resources.Load<Sprite>(visorIconPath);
+                    if (vsp) visorIconImg.sprite = vsp;
 
                     visorButton = vBtnGO.GetComponent<Button>();
                     visorButton.onClick.AddListener(OnVisorClicked);
 
                     var vTxtGO = new GameObject("VisorCount", typeof(Text));
                     vTxtGO.transform.SetParent(row, false);
-
                     visorCountTxt = vTxtGO.GetComponent<Text>();
                     visorCountTxt.font = runtimeFont;
                     visorCountTxt.fontSize = 32;
@@ -228,26 +209,22 @@ namespace KMines
                     vTxtRT.anchorMax = new Vector2(1f, 1f);
                     vTxtRT.pivot = new Vector2(1f, 1f);
                     vTxtRT.sizeDelta = new Vector2(120f, 32f);
-                    // exakt samma rad som missile
                     vTxtRT.anchoredPosition = new Vector2(-8f, 0f);
                 }
             }
         }
 
-        // -------------------------------------------------
-        // Button callbacks
-        // -------------------------------------------------
         void OnMenuClicked()
         {
+            // din GameUI har ShowPausePanel()
             if (gameUI != null)
-                gameUI.TogglePause();
+                gameUI.ShowPausePanel();
         }
 
         void OnMissileClicked()
         {
             if (board == null) return;
             if (board.MissileCount() <= 0) return;
-
             board.ArmMissile();
         }
 
@@ -259,10 +236,7 @@ namespace KMines
 
         void Update()
         {
-            if (!board) return;
-
-            // ----- MISSILE STATUS -----
-            if (missileCountTxt != null && missileIconImg != null)
+            if (board != null && missileCountTxt != null && missileIconImg != null)
             {
                 int m = board.MissileCount();
                 missileCountTxt.text = "x" + m.ToString();
@@ -270,13 +244,11 @@ namespace KMines
                 missileIconImg.color = hasAny ? missileEnabledColor : missileDisabledColor;
             }
 
-            // ----- VISOR STATUS -----
             if (visorCountTxt != null && visorIconImg != null)
             {
-                int visorCount = PlayerInventory.GetPulseVisorOwned();
-                bool hasAny = visorCount > 0;
-
-                visorCountTxt.text = "x" + visorCount.ToString();
+                int v = PlayerInventory.GetPulseVisorOwned();
+                bool hasAny = v > 0;
+                visorCountTxt.text = "x" + v.ToString();
                 visorIconImg.color = hasAny ? visorEnabledColor : visorDisabledColor;
                 visorCountTxt.color = hasAny ? visorTextEnabledColor : visorTextDisabledColor;
             }
