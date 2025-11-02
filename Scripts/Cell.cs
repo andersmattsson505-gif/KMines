@@ -69,11 +69,11 @@ namespace KMines
             else
                 gameObject.layer = 0;
 
-            // 🔴 VIKTIGT: träffyta får inte vara större än rutan → annars klickar man på cellen under
+            // 🔴 träffyta = ungefär rutan, inte större
             BoxCollider box = col as BoxCollider;
             if (box == null) box = gameObject.AddComponent<BoxCollider>();
 
-            float hitSize = Mathf.Max(0.9f, tileSize * 0.98f);   // 98% av rutan, aldrig mindre än 0.9
+            float hitSize = Mathf.Max(0.9f, tileSize * 0.98f);
             box.size   = new Vector3(hitSize, 0.4f, hitSize);
             box.center = Vector3.zero;
 
@@ -166,6 +166,16 @@ namespace KMines
                     textGO.SetActive(true);
                 }
             }
+        }
+
+        // -------------------------------------------------
+        // Flagga (Board.ToggleFlagAt ropar hit)
+        // -------------------------------------------------
+        public void SetFlag(bool on)
+        {
+            // just nu: använd ringen som flagg-indikator
+            if (ringSR != null)
+                ringSR.enabled = on;
         }
     }
 }
