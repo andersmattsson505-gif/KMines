@@ -1,286 +1,449 @@
+using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.EventSystems;
-using System.Reflection;
-#if ENABLE_INPUT_SYSTEM
-using UnityEngine.InputSystem.UI;
-#endif
 
 namespace KMines
 {
-    [DefaultExecutionOrder(-5000)]
-    public class Boot : MonoBehaviour
+    [DisallowMultipleComponent]
+    [DefaultExecutionOrder(-1000)]
+    public class Board : MonoBehaviour
     {
-        [Header("Fallback level defaults")]
-        public int defaultWidth = 9;
-        public int defaultHeight = 15;
-        public float defaultTileSize = 1.0f;
-        public float defaultMineDensity = 0.16f;
-        public bool defaultTimed = false;
-        public float defaultTimeLimitSeconds = 60f;
+        // -------------------------------------------------
+        // Layout / data (det som Boot & LevelLoader förväntar sig)
+        // -------------------------------------------------
+        [Header("Layout")]
+        public int width = 9;
+        public int height = 15;
+        [Tooltip("Storlek på 1 ruta i world units")]
+        public float tileSize = 1.0f;
+        [Tooltip("Positivt värde flyttar hela rutnätet NER på skärmen (i +Z)")]
+        public float verticalGridOffset = 0.5f;   // i "rutor"
 
-        [Header("Arcade defaults")]
-        public int arcadeWidth = 9;
-        public int arcadeHeight = 15;
-        public float arcadeMineDensity = 0.20f;
+        [Header("Mines")]
+        [Tooltip("0.16 = 16% av rutorna blir minor")]
+        public float mineDensity = 0.16f;
 
-        [Header("Boss defaults")]
-        public int bossWidth = 9;
-        public int bossHeight = 14;
-        public float bossMineDensity = 0.22f;
-        public float bossTimeLimitSeconds = 30f;
+        [Header("Visuals")]
+        [Tooltip("Om tomma laddas från Resources/Art/…")]
+        public Texture2D closedTex;
+        public Texture2D openTex;
+        [Tooltip("Root att lägga alla celler under. Om null används detta GameObject.")]
+        public Transform cellRoot;
+
+        [Header("Score")]
+        public int scorePerSafe = 1000;
+        public int scorePerNumber = 1500;
+
+        [Header("Missiles")]
+        [SerializeField] int startMissiles = 3;
+
+        [Header("Themes (valfritt)")]
+        public List<ThemeDef> themes = new List<ThemeDef>();
+        string currentTheme = "grass";
+
+        // runtime-speldata
+        public Cell[,] grid;
+        public bool[,] mines;
+        public bool[,] flagged;
+        public int[,] near;
+
+        // missiles / energy
+        int missiles;
+        bool missileArmed;
+        bool missilesEnabled = true;
+
+        // timer-koppling
+        [HideInInspector] public GameTimer gameTimer;
+        [HideInInspector] public float bonusPerSafeReveal = 0f;
+
+        // HUD-färger
+        [HideInInspector] public Color panelColorForHUD = new Color(0.07f, 0.09f, 0.11f, 1f);
+        [HideInInspector] public Color accentColorForHUD = new Color(0.1f, 0.6f, 0.9f, 1f);
+
+        public int score = 0;
+        bool firstClickDone = false;
+
+        void Awake()
+        {
+            if (!cellRoot) cellRoot = this.transform;
+        }
 
         void Start()
         {
-            // --- CAMERA ---
-            var cam = Camera.main;
-            if (!cam)
-            {
-                var camGO = new GameObject("Main Camera");
-                cam = camGO.AddComponent<Camera>();
-                cam.tag = "MainCamera";
-            }
-
-            cam.orthographic = true;
-            cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.06f, 0.07f, 0.09f, 1f);
-            cam.transform.position = new Vector3(0f, 10f, 0f);
-            cam.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-            cam.nearClipPlane = 0.1f;
-            cam.farClipPlane = 200f;
-
-            // --- EVENT SYSTEM ---
-            if (!FindObjectOfType<EventSystem>())
-            {
-                var esGO = new GameObject("EventSystem");
-                esGO.AddComponent<EventSystem>();
-#if ENABLE_INPUT_SYSTEM
-                esGO.AddComponent<InputSystemUIInputModule>();
-#else
-                esGO.AddComponent<StandaloneInputModule>();
-#endif
-            }
-
-            // --- BOARD ---
-            var boardGO = new GameObject("Board");
-            // liten offset så bakgrundsbild/ram inte z-fightar
-            boardGO.transform.position = new Vector3(0f, 0f, -0.8f);
-            var board = boardGO.AddComponent<Board>();
-
-            // --- GAME UI (WIN/LOSE/TIME UP overlay) ---
-            var uiGO = new GameObject("GameUI");
-            var gameUI = uiGO.AddComponent<GameUI>();
-            gameUI.SetBoard(board);
-
-            // --- LEVEL LOADER ---
-            var loaderObj = new GameObject("LevelLoader");
-            var loader = loaderObj.AddComponent<LevelLoader>();
-            loader.board = board;
-
-            // --- WIN/LOSE MANAGER ---
-            var rulesGO = new GameObject("WinLoseManager");
-            var rules = rulesGO.AddComponent<WinLoseManager>();
-            rules.board = board;
-            rules.gameUI = gameUI;
-            rules.levelLoader = loader;
-
-            // --- TIMER UI + TIMER LOGIC ---
-            var timerUiGO = new GameObject("TimerUI");
-            var placement = timerUiGO.AddComponent<TimerUIPlacement>();
-            var timerUI = timerUiGO.AddComponent<TimerUI>();
-
-            var timerGO = new GameObject("GameTimer");
-            var gameTimer = timerGO.AddComponent<GameTimer>();
-            gameTimer.rules = rules;
-            gameTimer.timerUI = timerUI;
-            loader.gameTimer = gameTimer;
-            rules.gameTimer = gameTimer;
-
-            // --- INPUT ---
-            var inputGO = new GameObject("Input");
-            var smart = inputGO.AddComponent<SmartClickInput>();
-            smart.target = board;
-            smart.cam = cam;
-            smart.rules = rules;
-
-            // --- HUD (Score/Best/Level/etc) ---
-            var hudGO = new GameObject("KaelenHUD");
-            var hud = hudGO.AddComponent<KaelenHUD>();
-            TryAssignBoard(hud, board);
-
-            // --- Missile UI (hörn) ---
-            // var missileUiGO = new GameObject("UI_Missile");
-            // var missileUI = missileUiGO.AddComponent<MissileUI>();
-            // TryAssignBoard(missileUI, board);
-
-            // --- Visor Scan Effect ---
-            var visorScanGO = new GameObject("VisorScanEffect");
-            var visorScan = visorScanGO.AddComponent<VisorScanEffect>();
-            visorScan.board = board;
-
-            // --- Visor UI ---
-            // var visorUiGO = new GameObject("UI_Visor");
-            // var visorUI = visorUiGO.AddComponent<VisorUI>();
-            // visorUI.positionXFromRight = 250f;
-            // visorUI.positionYFromTop = 40f;
-            // visorUI.scanEffect = visorScan;
-
-            // --- DEFAULT LEVEL DATA om LevelLoader saknar levels ---
-            if (loader.levels == null || loader.levels.Length == 0)
-            {
-                loader.levels = new LevelDef[1];
-                loader.levels[0] = new LevelDef
-                {
-                    width = defaultWidth,
-                    height = defaultHeight,
-                    tileSize = defaultTileSize,
-                    mineDensity = defaultMineDensity,
-                    timed = defaultTimed,
-                    timeLimitSeconds = defaultTimeLimitSeconds
-                };
-                loader.currentIndex = 0;
-            }
-
-            // --- LÄS KONFIG FRÅN MENY (GameModeSettings) ---
-            GameSessionConfig cfg;
-            if (GameModeSettings.hasConfig)
-            {
-                cfg = GameModeSettings.current;
-            }
-            else
-            {
-                int idx = Mathf.Clamp(loader.currentIndex, 0, loader.levels.Length - 1);
-                cfg = new GameSessionConfig
-                {
-                    mode = GameModeType.Campaign,
-                    levelIndex = idx,
-                    allowMissiles = true,
-                    timed = loader.levels[idx].timed,
-                    timeLimitSeconds = loader.levels[idx].timeLimitSeconds,
-                    timeBonusPerSafeReveal = 0f,
-                    useCustomBoardSize = false,
-                    customWidth = 0,
-                    customHeight = 0,
-                    customMineDensity = 0f,
-                    tilesetTheme = "grass"
-                };
-            }
-
-            // Slumpa tema vid Arcade om "random"
-            string finalTheme = cfg.tilesetTheme;
-            if (cfg.mode == GameModeType.Arcade &&
-                (string.IsNullOrEmpty(finalTheme) || finalTheme == "random"))
-            {
-                string[] pool = { "grass", "desert", "ice", "toxic", "boss_scorpion" };
-                finalTheme = pool[Random.Range(0, pool.Length)];
-            }
-
-            // Ställ in board
-            board.SetTheme(finalTheme);
-            board.SetMissilesEnabled(cfg.allowMissiles);
-            board.gameTimer = gameTimer;
-            board.bonusPerSafeReveal = cfg.timeBonusPerSafeReveal;
-
-            // --- LADDA NIVÅ BASERAT PÅ LÄGE ---
-            switch (cfg.mode)
-            {
-                case GameModeType.Campaign:
-                    {
-                        int li = Mathf.Clamp(cfg.levelIndex, 0, loader.levels.Length - 1);
-                        loader.currentIndex = li;
-                        loader.LoadLevel(li);
-                        break;
-                    }
-                case GameModeType.Arcade:
-                    {
-                        // tvinga vår teststorlek oavsett sparad config
-                        int w = 8;
-                        int h = 14;
-                        float dens = cfg.useCustomBoardSize ? cfg.customMineDensity : arcadeMineDensity;
-
-                        var arc = new LevelDef
-                        {
-                            width = w,
-                            height = h,
-                            tileSize = defaultTileSize,
-                            mineDensity = dens,
-                            timed = cfg.timed,
-                            timeLimitSeconds = cfg.timeLimitSeconds
-                        };
-
-                        loader.levels = new LevelDef[1] { arc };
-                        loader.currentIndex = 0;
-                        loader.LoadLevel(0);
-
-                        board.SetMissilesEnabled(cfg.allowMissiles);
-                        board.SetTheme(finalTheme);
-
-                        if (cfg.timed)
-                        {
-                            gameTimer.StartLevelTimer(true, cfg.timeLimitSeconds);
-                        }
-                        break;
-                    }
-                case GameModeType.Boss:
-                    {
-                        var boss = new LevelDef
-                        {
-                            width = bossWidth,
-                            height = bossHeight,
-                            tileSize = defaultTileSize,
-                            mineDensity = bossMineDensity,
-                            timed = true,
-                            timeLimitSeconds = (cfg.timeLimitSeconds > 0f ? cfg.timeLimitSeconds : bossTimeLimitSeconds)
-                        };
-
-                        loader.levels = new LevelDef[1] { boss };
-                        loader.currentIndex = 0;
-                        loader.LoadLevel(0);
-
-                        board.SetMissilesEnabled(false);
-                        board.SetTheme(finalTheme);
-
-                        gameTimer.StartLevelTimer(true, boss.timeLimitSeconds);
-                        break;
-                    }
-            }
-
-            // --- VIEWPORT FITTER (NYTT) ---
-            var fitGO = new GameObject("ViewportFitter");
-            var fitter = fitGO.AddComponent<BoardViewportFitter>();
-            fitter.cam = cam;
-            fitter.board = board;
-
-            // Hämta pixlar från HUD så ramen alltid respekteras
-            fitter.uiTopPx = hud.topBarHeight;
-            fitter.uiBottomPx = 0f;
-            fitter.uiLeftPx = hud.sideGutterWidth;
-            fitter.uiRightPx = hud.sideGutterWidth;
-
-            fitter.referenceResolution = new Vector2(1080f, 1920f);
-            fitter.extraWorldPadding = 0.20f;
-            fitter.updateEveryFrame = true;
-            fitter.FitNow();
+            Build();
         }
 
-        static void TryAssignBoard(Component targetComponent, Board boardRef)
+        // -------------------------------------------------
+        // BYGG BRÄDE
+        // -------------------------------------------------
+        public void Build()
         {
-            if (targetComponent == null || boardRef == null) return;
+            // 1) laddning av standard-texturer
+            if (closedTex == null) closedTex = Resources.Load<Texture2D>("Art/tile_closed");
+            if (openTex == null) openTex = Resources.Load<Texture2D>("Art/tile_open");
 
-            var t = targetComponent.GetType();
+            // 2) skapa arrayer
+            grid = new Cell[width, height];
+            mines = new bool[width, height];
+            flagged = new bool[width, height];
+            near = new int[width, height];
 
-            var f = t.GetField("board", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                 ?? t.GetField("Board", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            if (f != null && f.FieldType == typeof(Board))
+            // 3) rensa gamla celler
+            if (cellRoot != null)
             {
-                f.SetValue(targetComponent, boardRef);
+                for (int i = cellRoot.childCount - 1; i >= 0; i--)
+                {
+                    var ch = cellRoot.GetChild(i);
+#if UNITY_EDITOR
+                    if (!Application.isPlaying) DestroyImmediate(ch.gameObject);
+                    else Destroy(ch.gameObject);
+#else
+                    Destroy(ch.gameObject);
+#endif
+                }
             }
 
-            var p = t.GetProperty("board", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                 ?? t.GetProperty("Board", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            if (p != null && p.PropertyType == typeof(Board) && p.CanWrite)
+            // 4) räkna ut hur många minor vi ska ha från density
+            int mineCount = Mathf.RoundToInt(width * height * Mathf.Clamp01(mineDensity));
+            PlaceMinesRandom(mineCount);
+
+            // 5) räkna antal runt
+            RecalcNear();
+
+            // 6) skapa alla celler
+            float offX = -(width - 1) * 0.5f * tileSize;
+            float offZ = -(height - 1) * 0.5f * tileSize;
+
+            // vår extra-offset (i rutor → world)
+            float worldOffsetZ = verticalGridOffset * tileSize;
+
+            for (int y = 0; y < height; y++)
             {
-                p.SetValue(targetComponent, boardRef, null);
+                for (int x = 0; x < width; x++)
+                {
+                    Vector3 pos = new Vector3(
+                        offX + x * tileSize,
+                        0f,
+                        offZ + y * tileSize - worldOffsetZ   // flytta allt lite ner
+                    );
+
+                    var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                    go.name = $"Cell_{x}_{y}";
+                    go.transform.SetParent(cellRoot, false);
+                    go.transform.localPosition = pos;
+                    go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                    go.transform.localScale = Vector3.one;
+
+                    var col = go.GetComponent<Collider>();
+                    if (col) Destroy(col);
+
+                    var cell = go.AddComponent<Cell>();
+                    bool hasMine = mines[x, y];
+                    int nearCount = near[x, y];
+                    cell.Init(this, x, y, hasMine, nearCount, tileSize, closedTex, openTex);
+                    grid[x, y] = cell;
+                }
             }
+
+            // 7) missiles
+            if (missilesEnabled) missiles = startMissiles;
+            else missiles = 0;
+            missileArmed = false;
+
+            // 8) score reset
+            score = 0;
+            firstClickDone = false;
+        }
+
+        void PlaceMinesRandom(int count)
+        {
+            int placed = 0;
+            int max = width * height;
+            System.Random rng = new System.Random();
+            while (placed < count && placed < max)
+            {
+                int x = rng.Next(0, width);
+                int y = rng.Next(0, height);
+                if (mines[x, y]) continue;
+                mines[x, y] = true;
+                placed++;
+            }
+        }
+
+        void RecalcNear()
+        {
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    near[x, y] = CountNear8(x, y);
+                }
+            }
+        }
+
+        int CountNear8(int cx, int cy)
+        {
+            int cnt = 0;
+            for (int y = cy - 1; y <= cy + 1; y++)
+            {
+                for (int x = cx - 1; x <= cx + 1; x++)
+                {
+                    if (x == cx && y == cy) continue;
+                    if (x < 0 || y < 0 || x >= width || y >= height) continue;
+                    if (mines[x, y]) cnt++;
+                }
+            }
+            return cnt;
+        }
+
+        // -------------------------------------------------
+        // INPUT API
+        // -------------------------------------------------
+        public void ClickAt(Vector3 worldPos)
+        {
+            var cell = WorldToCell(worldPos);
+            ClickCell(cell);
+        }
+
+        public void ToggleFlagAt(Vector3 worldPos)
+        {
+            var cell = WorldToCell(worldPos);
+            if (cell == null) return;
+            int x = cell.x;
+            int y = cell.y;
+            bool now = !flagged[x, y];
+            flagged[x, y] = now;
+            cell.SetFlag(now);
+        }
+
+        public Cell WorldToCell(Vector3 worldPos)
+        {
+            Vector3 local = worldPos - transform.position;
+
+            // vi sänkte alla rutor med verticalGridOffset*ruta i Build()
+            // så här måste vi ta bort samma offset innan vi räknar index
+            float zCorrected = local.z + (verticalGridOffset * tileSize);
+
+            float localX = (local.x / tileSize) + (width - 1) * 0.5f;
+            float localY = (zCorrected / tileSize) + (height - 1) * 0.5f;
+
+            int x = Mathf.RoundToInt(localX);
+            int y = Mathf.RoundToInt(localY);
+
+            if (x < 0 || y < 0 || x >= width || y >= height)
+                return null;
+
+            return grid[x, y];
+        }
+
+
+        public void ClickCell(Cell cell)
+        {
+            if (cell == null) return;
+            int x = cell.x;
+            int y = cell.y;
+            if (cell.opened) return;
+
+            if (!firstClickDone)
+            {
+                firstClickDone = true;
+                if (mines[x, y])
+                {
+                    if (TryRelocateMine(x, y))
+                    {
+                        RecalcNear();
+                        RevealFrom4(x, y);
+                        return;
+                    }
+                }
+            }
+
+            if (mines[x, y])
+            {
+                cell.Open(true);
+                return;
+            }
+
+            RevealFrom4(x, y);
+        }
+
+        bool TryRelocateMine(int fromX, int fromY)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    if (x == fromX && y == fromY) continue;
+                    if (mines[x, y]) continue;
+                    mines[x, y] = true;
+                    mines[fromX, fromY] = false;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        void RevealFrom4(int sx, int sy)
+        {
+            Queue<Vector2Int> q = new Queue<Vector2Int>();
+            q.Enqueue(new Vector2Int(sx, sy));
+
+            while (q.Count > 0)
+            {
+                var v = q.Dequeue();
+                int x = v.x;
+                int y = v.y;
+                if (x < 0 || y < 0 || x >= width || y >= height) continue;
+
+                var c = grid[x, y];
+                if (c == null) continue;
+                if (c.opened) continue;
+                if (flagged[x, y]) continue;
+                if (mines[x, y]) continue;
+
+                c.near = near[x, y];
+                c.Open(false);
+
+                score += (near[x, y] > 0) ? scorePerNumber : scorePerSafe;
+
+                if (bonusPerSafeReveal > 0f && gameTimer != null && gameTimer.IsActive())
+                    gameTimer.AddTime(bonusPerSafeReveal);
+
+                if (near[x, y] == 0)
+                {
+                    q.Enqueue(new Vector2Int(x - 1, y));
+                    q.Enqueue(new Vector2Int(x + 1, y));
+                    q.Enqueue(new Vector2Int(x, y - 1));
+                    q.Enqueue(new Vector2Int(x, y + 1));
+                }
+            }
+        }
+
+        // -------------------------------------------------
+        // MISSILE-API
+        // -------------------------------------------------
+        public int MissileCount() => missiles;
+        public bool IsMissileArmed() => missileArmed && missiles > 0;
+
+        public void SetMissilesEnabled(bool enabled)
+        {
+            missilesEnabled = enabled;
+        }
+
+        public void ArmMissile()
+        {
+            if (!missilesEnabled) return;
+            if (missiles <= 0) return;
+            missileArmed = true;
+        }
+
+        public void UseMissileAt(Vector3 worldPoint)
+        {
+            var cell = WorldToCell(worldPoint);
+            UseMissileAtCell(cell);
+        }
+
+        public void UseMissileAtCell(Cell center)
+        {
+            if (center == null) return;
+            if (!IsMissileArmed()) return;
+
+            var wlm = FindObjectOfType<WinLoseManager>();
+            if (wlm != null) wlm.BeginMissileGrace(0.35f);
+
+            missiles = Mathf.Max(0, missiles - 1);
+            int cx = center.x;
+            int cy = center.y;
+
+            for (int y = cy - 1; y <= cy + 1; y++)
+            {
+                for (int x = cx - 1; x <= cx + 1; x++)
+                {
+                    if (x < 0 || y < 0 || x >= width || y >= height) continue;
+                    bool wasMine = mines[x, y];
+                    mines[x, y] = false;
+                    var c = grid[x, y];
+                    if (c != null)
+                    {
+                        c.hasMine = false;
+                        if (wasMine)
+                        {
+                            MissileHitFX.Spawn(c.transform.position);
+                        }
+                    }
+                }
+            }
+
+            for (int y = cy - 2; y <= cy + 2; y++)
+            {
+                for (int x = cx - 2; x <= cx + 2; x++)
+                {
+                    if (x < 0 || y < 0 || x >= width || y >= height) continue;
+                    near[x, y] = CountNear8(x, y);
+                }
+            }
+
+            for (int y = cy - 1; y <= cy + 1; y++)
+            {
+                for (int x = cx - 1; x <= cx + 1; x++)
+                {
+                    if (x < 0 || y < 0 || x >= width || y >= height) continue;
+                    flagged[x, y] = false;
+                    var c = grid[x, y];
+                    if (c == null) continue;
+                    c.near = near[x, y];
+                    c.Open(false);
+
+                    int gained = (near[x, y] > 0) ? 1500 : 1000;
+                    score += gained;
+                    ScorePopupFX.Spawn(c.transform.position, gained);
+                }
+            }
+
+            missileArmed = false;
+        }
+
+        // -------------------------------------------------
+        // Tema
+        // -------------------------------------------------
+        public void SetTheme(string themeId)
+        {
+            if (string.IsNullOrEmpty(themeId)) themeId = "grass";
+            currentTheme = themeId;
+
+            var tl = ThemeLibrary.GetTheme(themeId);
+            panelColorForHUD = tl.backplateColor;
+            accentColorForHUD = new Color(1f, 0.6f, 0.2f, 1f);
+        }
+
+        // -------------------------------------------------
+        // Hjälpare för WinLoseManager
+        // -------------------------------------------------
+        public int CountCorrectFlags()
+        {
+            int correct = 0;
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    if (flagged[x, y] && mines[x, y])
+                        correct++;
+                }
+            }
+            return correct;
+        }
+
+        public void AddScore(int amount)
+        {
+            score += amount;
+        }
+
+        [System.Serializable]
+        public class ThemeDef
+        {
+            public string id;
+            public Sprite boardSprite;
+            public Color panelColor = new Color(0.07f, 0.09f, 0.11f, 1f);
+            public Color accentColor = new Color(0.1f, 0.6f, 0.9f, 1f);
         }
     }
 }
