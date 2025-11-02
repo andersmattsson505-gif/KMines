@@ -103,7 +103,7 @@ namespace KMines
             smart.cam = cam;
             smart.rules = rules;
 
-            // --- GAMLA HUD:en (vi behåller den för mått / ev. text) ---
+            // --- GAMLA HUD:en (behövs för vissa script) ---
             var hudGO = new GameObject("KaelenHUD");
             var hud = hudGO.AddComponent<KaelenHUD>();
             TryAssignBoard(hud, board);
@@ -134,6 +134,28 @@ namespace KMines
                 }
             }
 
+            // --- BG: metall (läggs FÖRST i canvas) ---
+            {
+                var bgGo = new GameObject("BG_Metal", typeof(RectTransform), typeof(Image));
+                bgGo.transform.SetParent(targetCanvas.transform, false);
+
+                var bgRt = (RectTransform)bgGo.transform;
+                bgRt.anchorMin = Vector2.zero;
+                bgRt.anchorMax = Vector2.one;
+                bgRt.pivot = new Vector2(0.5f, 0.5f);
+                bgRt.offsetMin = Vector2.zero;
+                bgRt.offsetMax = Vector2.zero;
+
+                var bgImg = bgGo.GetComponent<Image>();
+                var spr = Resources.Load<Sprite>("Art/ui_bg/bg_metal_base");
+                if (spr) bgImg.sprite = spr;
+                bgImg.preserveAspect = false;
+                bgImg.color = Color.white;
+
+                // längst bak
+                bgGo.transform.SetAsFirstSibling();
+            }
+
             // --- HUDTop (NY: visor + missile i samma rad) ---
             var hudTopGO = new GameObject("HUDTop", typeof(RectTransform));
             hudTopGO.transform.SetParent(targetCanvas.transform, false);
@@ -141,8 +163,8 @@ namespace KMines
             hudTopRT.anchorMin = new Vector2(0f, 1f);
             hudTopRT.anchorMax = new Vector2(1f, 1f);
             hudTopRT.pivot = new Vector2(0.5f, 1f);
-            // 96px hög bar
-            hudTopRT.offsetMin = new Vector2(0f, -96f);
+            // nu 120 px så den matchar HUDTop.cs
+            hudTopRT.offsetMin = new Vector2(0f, -120f);
             hudTopRT.offsetMax = new Vector2(0f, 0f);
             var hudTop = hudTopGO.AddComponent<HUDTop>();
             hudTop.board = board;
@@ -156,13 +178,9 @@ namespace KMines
             visorScan.board = board;
             hudTop.scanEffect = visorScan;
 
-            // --- (BORTTAGET) gammal Missile UI / Visor UI ---
-            // var missileUiGO = new GameObject("UI_Missile");
-            // var missileUI = missileUiGO.AddComponent<MissileUI>();
-            // TryAssignBoard(missileUI, board);
-            // var visorUiGO = new GameObject("UI_Visor");
-            // var visorUI = visorUiGO.AddComponent<VisorUI>();
-            // visorUI.scanEffect = visorScan;
+            // --- TimerUI in i canvas så den syns ---
+            timerUiGO.transform.SetParent(targetCanvas.transform, false);
+            timerUiGO.transform.SetAsLastSibling(); // ovanpå bakgrunden
 
             // --- OM INGA LEVELS: skapa 1 default ---
             if (loader.levels == null || loader.levels.Length == 0)
@@ -223,62 +241,62 @@ namespace KMines
             switch (cfg.mode)
             {
                 case GameModeType.Campaign:
-                {
-                    int li = Mathf.Clamp(cfg.levelIndex, 0, loader.levels.Length - 1);
-                    loader.currentIndex = li;
-                    loader.LoadLevel(li);
-                    break;
-                }
+                    {
+                        int li = Mathf.Clamp(cfg.levelIndex, 0, loader.levels.Length - 1);
+                        loader.currentIndex = li;
+                        loader.LoadLevel(li);
+                        break;
+                    }
                 case GameModeType.Arcade:
-                {
-                    // vi tvingar 8x14 här
-                    int w = 8;
-                    int h = 14;
-                    float dens = cfg.useCustomBoardSize ? cfg.customMineDensity : arcadeMineDensity;
-
-                    var arc = new LevelDef
                     {
-                        width = w,
-                        height = h,
-                        tileSize = defaultTileSize,
-                        mineDensity = dens,
-                        timed = cfg.timed,
-                        timeLimitSeconds = cfg.timeLimitSeconds
-                    };
+                        // vi tvingar 8x14 här
+                        int w = 8;
+                        int h = 14;
+                        float dens = cfg.useCustomBoardSize ? cfg.customMineDensity : arcadeMineDensity;
 
-                    loader.levels = new LevelDef[1] { arc };
-                    loader.currentIndex = 0;
-                    loader.LoadLevel(0);
+                        var arc = new LevelDef
+                        {
+                            width = w,
+                            height = h,
+                            tileSize = defaultTileSize,
+                            mineDensity = dens,
+                            timed = cfg.timed,
+                            timeLimitSeconds = cfg.timeLimitSeconds
+                        };
 
-                    board.SetMissilesEnabled(cfg.allowMissiles);
-                    board.SetTheme(finalTheme);
+                        loader.levels = new LevelDef[1] { arc };
+                        loader.currentIndex = 0;
+                        loader.LoadLevel(0);
 
-                    if (cfg.timed)
-                        gameTimer.StartLevelTimer(true, cfg.timeLimitSeconds);
-                    break;
-                }
+                        board.SetMissilesEnabled(cfg.allowMissiles);
+                        board.SetTheme(finalTheme);
+
+                        if (cfg.timed)
+                            gameTimer.StartLevelTimer(true, cfg.timeLimitSeconds);
+                        break;
+                    }
                 case GameModeType.Boss:
-                {
-                    var boss = new LevelDef
                     {
-                        width = bossWidth,
-                        height = bossHeight,
-                        tileSize = defaultTileSize,
-                        mineDensity = bossMineDensity,
-                        timed = true,
-                        timeLimitSeconds = (cfg.timeLimitSeconds > 0f ? cfg.timeLimitSeconds : bossTimeLimitSeconds)
-                    };
+                        var boss = new LevelDef
+                        {
+                            width = bossWidth,
+                            height = bossHeight,
+                            tileSize = defaultTileSize,
+                            mineDensity = bossMineDensity,
+                            timed = true,
+                            timeLimitSeconds = (cfg.timeLimitSeconds > 0f ? cfg.timeLimitSeconds : bossTimeLimitSeconds)
+                        };
 
-                    loader.levels = new LevelDef[1] { boss };
-                    loader.currentIndex = 0;
-                    loader.LoadLevel(0);
+                        loader.levels = new LevelDef[1] { boss };
+                        loader.currentIndex = 0;
+                        loader.LoadLevel(0);
 
-                    board.SetMissilesEnabled(false);
-                    board.SetTheme(finalTheme);
+                        board.SetMissilesEnabled(false);
+                        board.SetTheme(finalTheme);
 
-                    gameTimer.StartLevelTimer(true, boss.timeLimitSeconds);
-                    break;
-                }
+                        gameTimer.StartLevelTimer(true, boss.timeLimitSeconds);
+                        break;
+                    }
             }
 
             // --- VIEWPORT FITTER ---
