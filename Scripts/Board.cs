@@ -1,5 +1,5 @@
-using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace KMines
 {
@@ -7,45 +7,67 @@ namespace KMines
     [DefaultExecutionOrder(-1000)]
     public class Board : MonoBehaviour
     {
-        // används av KMinesBoardMenu.cs i Editor
-        public bool autoBuildInEditor = true;
-
-        [Header("Size")]
+        // -------------------------------------------------
+        // Layout / data (det som Boot & LevelLoader förväntar sig)
+        // -------------------------------------------------
+        [Header("Layout")]
         public int width = 9;
         public int height = 15;
+
+        // Boot + LevelLoader använder detta namnet
+        [Tooltip("Storlek på 1 ruta i world units")]
         public float tileSize = 1.0f;
 
         [Header("Mines")]
+        [Tooltip("0.16 = 16% av rutorna blir minor")]
         public float mineDensity = 0.16f;
-        public bool firstClickIsSafe = true;
+
+        [Header("Visuals")]
+        [Tooltip("Om tomma laddas från Resources/Art/…")]
+        public Texture2D closedTex;
+        public Texture2D openTex;
+
+        [Tooltip("Root att lägga alla celler under. Om null används detta GameObject.")]
+        public Transform cellRoot;
+
+        [Header("Score")]
+        public int scorePerSafe = 1000;
+        public int scorePerNumber = 1500;
 
         [Header("Missiles")]
         [SerializeField] int startMissiles = 3;
-        bool missilesEnabled = true;
-        int missiles = 0;
-        bool missileArmed = false;
 
-        [Header("Theme")]
-        [SerializeField] string currentThemeId = "grass";
+        [Header("Themes (valfritt)")]
+        public List<ThemeDef> themes = new List<ThemeDef>();
+        string currentTheme = "grass";
 
+        // runtime-speldata
         public Cell[,] grid;
         public bool[,] mines;
-        public bool[,] flags;
+        public bool[,] flagged;
         public int[,] near;
 
-        public GameTimer gameTimer;
-        public float bonusPerSafeReveal = 0f;
-        public int score = 0;
+        // missiles / energy
+        int missiles;
+        bool missileArmed;
+        bool missilesEnabled = true;
 
+        // timer-koppling
+        [HideInInspector] public GameTimer gameTimer;
+        [HideInInspector] public float bonusPerSafeReveal = 0f;
+
+        // HUD-färger
         [HideInInspector] public Color panelColorForHUD = new Color(0.07f, 0.09f, 0.11f, 1f);
-        [HideInInspector] public Color accentColorForHUD = new Color(0.10f, 0.60f, 0.90f, 1f);
+        [HideInInspector] public Color accentColorForHUD = new Color(0.1f, 0.6f, 0.9f, 1f);
+
+        public int score = 0;
 
         bool firstClickDone = false;
 
         void Awake()
         {
-            if (string.IsNullOrEmpty(currentThemeId))
-                currentThemeId = "grass";
+            if (!cellRoot)
+                cellRoot = this.transform;
         }
 
         void Start()
@@ -53,261 +75,116 @@ namespace KMines
             Build();
         }
 
-        public void SetTheme(string themeId)
-        {
-            if (string.IsNullOrEmpty(themeId))
-                themeId = "grass";
-            currentThemeId = themeId;
-        }
-
-        public void SetMissilesEnabled(bool enabled)
-        {
-            missilesEnabled = enabled;
-        }
-
-        public int MissileCount() => missiles;
-
-        public bool IsMissileArmed() => missileArmed && missiles > 0 && missilesEnabled;
-
-        public void ArmMissile() => ArmMissile(true);
-
-        public void ArmMissile(bool armed)
-        {
-            missileArmed = armed && missilesEnabled && missiles > 0;
-        }
-
-        public void AddScore(int amount)
-        {
-            score += amount;
-        }
-
-        public int CountCorrectFlags()
-        {
-            if (flags == null || mines == null)
-                return 0;
-
-            int correct = 0;
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++)
-                {
-                    if (flags[x, y] && mines[x, y])
-                        correct++;
-                }
-            }
-            return correct;
-        }
-
+        // -------------------------------------------------
+        // BYGG BRÄDE
+        // -------------------------------------------------
         public void Build()
         {
-            for (int i = transform.childCount - 1; i >= 0; i--)
-            {
-#if UNITY_EDITOR
-                if (!Application.isPlaying)
-                    DestroyImmediate(transform.GetChild(i).gameObject);
-                else
-                    Destroy(transform.GetChild(i).gameObject);
-#else
-                Destroy(transform.GetChild(i).gameObject);
-#endif
-            }
+            // 1) laddning av standard-texturer
+            if (closedTex == null)
+                closedTex = Resources.Load<Texture2D>("Art/tile_closed");
+            if (openTex == null)
+                openTex = Resources.Load<Texture2D>("Art/tile_open");
 
-            width = Mathf.Max(1, width);
-            height = Mathf.Max(1, height);
-            tileSize = Mathf.Max(0.01f, tileSize);
-            mineDensity = Mathf.Clamp01(mineDensity);
-
+            // 2) skapa arrayer
             grid = new Cell[width, height];
             mines = new bool[width, height];
-            flags = new bool[width, height];
+            flagged = new bool[width, height];
             near = new int[width, height];
-            score = 0;
-            firstClickDone = false;
 
-            int wantedMines = Mathf.RoundToInt(width * height * mineDensity);
-            wantedMines = Mathf.Clamp(wantedMines, 0, width * height - 1);
-
-            System.Random rng = new System.Random();
-            int placed = 0;
-            while (placed < wantedMines)
+            // 3) rensa gamla celler (om vi t.ex. laddar om nivå)
+            if (cellRoot != null)
             {
-                int rx = rng.Next(0, width);
-                int ry = rng.Next(0, height);
-                if (mines[rx, ry]) continue;
-                mines[rx, ry] = true;
-                placed++;
+                for (int i = cellRoot.childCount - 1; i >= 0; i--)
+                {
+                    var ch = cellRoot.GetChild(i);
+#if UNITY_EDITOR
+                    if (!Application.isPlaying)
+                        DestroyImmediate(ch.gameObject);
+                    else
+                        Destroy(ch.gameObject);
+#else
+                    Destroy(ch.gameObject);
+#endif
+                }
             }
 
-            for (int y = 0; y < height; y++)
-                for (int x = 0; x < width; x++)
-                    near[x, y] = CountNear8(x, y);
+            // 4) räkna ut hur många minor vi ska ha från density
+            int mineCount = Mathf.RoundToInt(width * height * Mathf.Clamp01(mineDensity));
+            PlaceMinesRandom(mineCount);
 
-            BoardTheme theme = ThemeLibrary.GetTheme(currentThemeId);
-            Texture2D texClosed = !string.IsNullOrEmpty(theme.closedTexPath)
-                ? Resources.Load<Texture2D>(theme.closedTexPath)
-                : null;
-            Texture2D texOpen = !string.IsNullOrEmpty(theme.openTexPath)
-                ? Resources.Load<Texture2D>(theme.openTexPath)
-                : null;
+            // 5) räkna antal runt
+            RecalcNear();
 
-            panelColorForHUD = theme.backplateColor;
-            accentColorForHUD = Color.Lerp(theme.backplateColor, new Color(0.1f, 0.6f, 0.9f, 1f), 0.35f);
-
-            float startX = -(width - 1) * tileSize * 0.5f;
-            float startZ = -(height - 1) * tileSize * 0.5f;
+            // 6) skapa alla celler som rena GameObjects + AddComponent<Cell>()
+            //    (ingen prefab!)
+            float offX = -(width - 1) * 0.5f * tileSize;
+            float offZ = -(height - 1) * 0.5f * tileSize;
 
             for (int y = 0; y < height; y++)
             {
                 for (int x = 0; x < width; x++)
                 {
-                    GameObject go = new GameObject($"Cell_{x}_{y}");
-                    go.transform.SetParent(this.transform, false);
-                    go.transform.localPosition = new Vector3(startX + x * tileSize, 0f, startZ + y * tileSize);
-                    go.transform.localRotation = Quaternion.identity;
+                    // world-pos så att brädet hamnar centrerat
+                    Vector3 pos = new Vector3(offX + x * tileSize, 0f, offZ + y * tileSize);
+
+                    var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                    go.name = $"Cell_{x}_{y}";
+                    go.transform.SetParent(cellRoot, false);
+                    go.transform.localPosition = pos;
+                    go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); // så den ligger plant
+                    go.transform.localScale = Vector3.one; // Cell.Init fixar visuell scaling
+
+                    // ta bort collider vi inte vill ha
+                    var col = go.GetComponent<Collider>();
+                    if (col) Destroy(col);
 
                     var cell = go.AddComponent<Cell>();
                     bool hasMine = mines[x, y];
                     int nearCount = near[x, y];
 
-                    cell.Init(this, x, y, hasMine, nearCount, tileSize, texClosed, texOpen);
+                    // init med våra texturer
+                    cell.Init(this, x, y, hasMine, nearCount, tileSize, closedTex, openTex);
 
                     grid[x, y] = cell;
                 }
             }
 
-            missiles = missilesEnabled ? startMissiles : 0;
-            missileArmed = false;
-        }
-
-        public void ClickAt(Vector3 worldPos)
-        {
-            Cell c = WorldToCell(worldPos);
-            if (c == null) return;
-            ClickCell(c.x, c.y);
-        }
-
-        public void ToggleFlagAt(Vector3 worldPos)
-        {
-            Cell c = WorldToCell(worldPos);
-            if (c == null) return;
-
-            int x = c.x;
-            int y = c.y;
-
-            flags[x, y] = !flags[x, y];
-        }
-
-        public void UseMissileAt(Vector3 worldPos)
-        {
-            if (!IsMissileArmed()) return;
-
-            Cell c = WorldToCell(worldPos);
-            if (c == null) return;
-
-            var wlm = FindObjectOfType<WinLoseManager>();
-            if (wlm != null)
-                wlm.BeginMissileGrace(0.35f);
-
-            missiles = Mathf.Max(0, missiles - 1);
-
-            int cx = c.x;
-            int cy = c.y;
-
-            for (int y = cy - 1; y <= cy + 1; y++)
-            {
-                for (int x = cx - 1; x <= cx + 1; x++)
-                {
-                    if (x < 0 || y < 0 || x >= width || y >= height) continue;
-
-                    mines[x, y] = false;
-                    near[x, y] = CountNear8(x, y);
-
-                    var cell = grid[x, y];
-                    if (cell != null && !cell.opened)
-                    {
-                        cell.Open(false);
-                        score += (near[x, y] > 0) ? 1500 : 1000;
-
-                        if (bonusPerSafeReveal > 0f && gameTimer != null && gameTimer.IsActive())
-                            gameTimer.AddTime(bonusPerSafeReveal);
-                    }
-
-                    flags[x, y] = false;
-                }
-            }
-
-            for (int y = cy - 2; y <= cy + 2; y++)
-                for (int x = cx - 2; x <= cx + 2; x++)
-                    if (x >= 0 && y >= 0 && x < width && y < height)
-                        near[x, y] = CountNear8(x, y);
-
-            missileArmed = false;
-        }
-
-        void ClickCell(int x, int y)
-        {
-            if (x < 0 || y < 0 || x >= width || y >= height) return;
-
-            var cell = grid[x, y];
-            if (cell == null) return;
-            if (cell.opened) return;
-            if (flags[x, y]) return;
-
-            if (firstClickIsSafe && !firstClickDone)
-            {
-                firstClickDone = true;
-                if (mines[x, y])
-                {
-                    if (TryRelocateMine(x, y))
-                    {
-                        for (int yy = 0; yy < height; yy++)
-                            for (int xx = 0; xx < width; xx++)
-                                near[xx, yy] = CountNear8(xx, yy);
-                        FloodReveal(x, y);
-                        return;
-                    }
-                }
-            }
-
-            if (mines[x, y])
-            {
-                cell.hasMine = true;
-                cell.Open(true);
-            }
+            // 7) missiles
+            if (missilesEnabled)
+                missiles = startMissiles;
             else
+                missiles = 0;
+            missileArmed = false;
+
+            // 8) score reset
+            score = 0;
+            firstClickDone = false;
+        }
+
+        void PlaceMinesRandom(int count)
+        {
+            int placed = 0;
+            int max = width * height;
+            System.Random rng = new System.Random();
+
+            while (placed < count && placed < max)
             {
-                FloodReveal(x, y);
+                int x = rng.Next(0, width);
+                int y = rng.Next(0, height);
+                if (mines[x, y]) continue;
+                mines[x, y] = true;
+                placed++;
             }
         }
 
-        void FloodReveal(int sx, int sy)
+        void RecalcNear()
         {
-            Queue<Vector2Int> q = new Queue<Vector2Int>();
-            q.Enqueue(new Vector2Int(sx, sy));
-
-            while (q.Count > 0)
+            for (int y = 0; y < height; y++)
             {
-                var v = q.Dequeue();
-                int x = v.x;
-                int y = v.y;
-
-                if (x < 0 || y < 0 || x >= width || y >= height) continue;
-                var cell = grid[x, y];
-                if (cell == null) continue;
-                if (cell.opened) continue;
-                if (flags[x, y]) continue;
-
-                cell.Open(false);
-
-                int gained = (near[x, y] > 0) ? 1500 : 1000;
-                score += gained;
-
-                if (near[x, y] == 0)
+                for (int x = 0; x < width; x++)
                 {
-                    q.Enqueue(new Vector2Int(x - 1, y));
-                    q.Enqueue(new Vector2Int(x + 1, y));
-                    q.Enqueue(new Vector2Int(x, y - 1));
-                    q.Enqueue(new Vector2Int(x, y + 1));
+                    near[x, y] = CountNear8(x, y);
                 }
             }
         }
@@ -327,6 +204,75 @@ namespace KMines
             return cnt;
         }
 
+        // -------------------------------------------------
+        // INPUT API (anropas från SmartClickInput)
+        // -------------------------------------------------
+        public void ClickAt(Vector3 worldPos)
+        {
+            var cell = WorldToCell(worldPos);
+            ClickCell(cell);
+        }
+
+        public void ToggleFlagAt(Vector3 worldPos)
+        {
+            var cell = WorldToCell(worldPos);
+            if (cell == null) return;
+
+            int x = cell.x;
+            int y = cell.y;
+
+            bool now = !flagged[x, y];
+            flagged[x, y] = now;
+            cell.SetFlag(now);
+        }
+
+        public Cell WorldToCell(Vector3 worldPos)
+        {
+            // vi vet att brädet är centrerat runt (0,0)
+            float localX = (worldPos.x) / tileSize + (width - 1) * 0.5f;
+            float localY = (worldPos.z) / tileSize + (height - 1) * 0.5f;
+
+            int x = Mathf.RoundToInt(localX);
+            int y = Mathf.RoundToInt(localY);
+
+            if (x < 0 || y < 0 || x >= width || y >= height)
+                return null;
+
+            return grid[x, y];
+        }
+
+        public void ClickCell(Cell cell)
+        {
+            if (cell == null) return;
+            int x = cell.x;
+            int y = cell.y;
+
+            if (cell.opened) return;
+
+            // första klicket ska vara säkert
+            if (!firstClickDone)
+            {
+                firstClickDone = true;
+                if (mines[x, y])
+                {
+                    if (TryRelocateMine(x, y))
+                    {
+                        RecalcNear();
+                        RevealFrom4(x, y);
+                        return;
+                    }
+                }
+            }
+
+            if (mines[x, y])
+            {
+                cell.Open(true);
+                return;
+            }
+
+            RevealFrom4(x, y);
+        }
+
         bool TryRelocateMine(int fromX, int fromY)
         {
             for (int y = 0; y < height; y++)
@@ -344,21 +290,177 @@ namespace KMines
             return false;
         }
 
-        public Cell WorldToCell(Vector3 worldPos)
+        void RevealFrom4(int sx, int sy)
         {
-            float startX = -(width - 1) * tileSize * 0.5f;
-            float startZ = -(height - 1) * tileSize * 0.5f;
+            Queue<Vector2Int> q = new Queue<Vector2Int>();
+            q.Enqueue(new Vector2Int(sx, sy));
 
-            float localX = (worldPos.x - (transform.position.x + startX)) / tileSize;
-            float localY = (worldPos.z - (transform.position.z + startZ)) / tileSize;
+            while (q.Count > 0)
+            {
+                var v = q.Dequeue();
+                int x = v.x;
+                int y = v.y;
+                if (x < 0 || y < 0 || x >= width || y >= height) continue;
 
-            int x = Mathf.RoundToInt(localX);
-            int y = Mathf.RoundToInt(localY);
+                var c = grid[x, y];
+                if (c == null) continue;
+                if (c.opened) continue;
+                if (flagged[x, y]) continue;
+                if (mines[x, y]) continue;
 
-            if (x < 0 || y < 0 || x >= width || y >= height)
-                return null;
+                c.near = near[x, y];
+                c.Open(false);
 
-            return grid[x, y];
+                // score
+                score += (near[x, y] > 0) ? scorePerNumber : scorePerSafe;
+
+                // ev. tidbonus
+                if (bonusPerSafeReveal > 0f && gameTimer != null && gameTimer.IsActive())
+                    gameTimer.AddTime(bonusPerSafeReveal);
+
+                // flood bara på 0-rutor
+                if (near[x, y] == 0)
+                {
+                    q.Enqueue(new Vector2Int(x - 1, y));
+                    q.Enqueue(new Vector2Int(x + 1, y));
+                    q.Enqueue(new Vector2Int(x, y - 1));
+                    q.Enqueue(new Vector2Int(x, y + 1));
+                }
+            }
+        }
+
+        // -------------------------------------------------
+        // MISSILE-API (anropas från HUD/MissileUI)
+        // -------------------------------------------------
+        public int MissileCount() => missiles;
+        public bool IsMissileArmed() => missileArmed && missiles > 0;
+
+        public void SetMissilesEnabled(bool enabled)
+        {
+            missilesEnabled = enabled;
+        }
+
+        public void ArmMissile()
+        {
+            if (!missilesEnabled) return;
+            if (missiles <= 0) return;
+            missileArmed = true;
+        }
+
+        public void UseMissileAt(Vector3 worldPoint)
+        {
+            var cell = WorldToCell(worldPoint);
+            UseMissileAtCell(cell);
+        }
+
+        public void UseMissileAtCell(Cell center)
+        {
+            if (center == null) return;
+            if (!IsMissileArmed()) return;
+
+            // grace
+            var wlm = FindObjectOfType<WinLoseManager>();
+            if (wlm != null) wlm.BeginMissileGrace(0.35f);
+
+            missiles = Mathf.Max(0, missiles - 1);
+
+            int cx = center.x;
+            int cy = center.y;
+
+            // ta bort minor 3x3
+            for (int y = cy - 1; y <= cy + 1; y++)
+            {
+                for (int x = cx - 1; x <= cx + 1; x++)
+                {
+                    if (x < 0 || y < 0 || x >= width || y >= height) continue;
+
+                    bool wasMine = mines[x, y];
+                    mines[x, y] = false;
+
+                    var c = grid[x, y];
+                    if (c != null)
+                    {
+                        c.hasMine = false;
+                        if (wasMine)
+                        {
+                            MissileHitFX.Spawn(c.transform.position);
+                        }
+                    }
+                }
+            }
+
+            // recalc runt 5x5
+            for (int y = cy - 2; y <= cy + 2; y++)
+                for (int x = cx - 2; x <= cx + 2; x++)
+                    if (!(x < 0 || y < 0 || x >= width || y >= height))
+                        near[x, y] = CountNear8(x, y);
+
+            // öppna 3x3
+            for (int y = cy - 1; y <= cy + 1; y++)
+            {
+                for (int x = cx - 1; x <= cx + 1; x++)
+                {
+                    if (x < 0 || y < 0 || x >= width || y >= height) continue;
+
+                    flagged[x, y] = false;
+                    var c = grid[x, y];
+                    if (c == null) continue;
+
+                    c.near = near[x, y];
+                    c.Open(false);
+
+                    int gained = (near[x, y] > 0) ? 1500 : 1000;
+                    score += gained;
+                    ScorePopupFX.Spawn(c.transform.position, gained);
+                }
+            }
+
+            missileArmed = false;
+        }
+
+        // -------------------------------------------------
+        // Tema (Boot anropar detta)
+        // -------------------------------------------------
+        public void SetTheme(string themeId)
+        {
+            if (string.IsNullOrEmpty(themeId))
+                themeId = "grass";
+
+            currentTheme = themeId;
+
+            // hämta färger från ThemeLibrary så HUD får rätt färg
+            var tl = ThemeLibrary.GetTheme(themeId);
+            panelColorForHUD = tl.backplateColor;
+            accentColorForHUD = new Color(1f, 0.6f, 0.2f, 1f); // kan tweakas
+
+            // om vi vill byta sprite/texturer här kan vi göra det senare
+        }
+
+        // -------------------------------------------------
+        // Hjälpare för WinLoseManager
+        // -------------------------------------------------
+        public int CountCorrectFlags()
+        {
+            int correct = 0;
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                    if (flagged[x, y] && mines[x, y])
+                        correct++;
+            return correct;
+        }
+
+        public void AddScore(int amount)
+        {
+            score += amount;
+        }
+
+        [System.Serializable]
+        public class ThemeDef
+        {
+            public string id;
+            public Sprite boardSprite;
+            public Color panelColor = new Color(0.07f, 0.09f, 0.11f, 1f);
+            public Color accentColor = new Color(0.1f, 0.6f, 0.9f, 1f);
         }
     }
 }
