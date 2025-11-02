@@ -285,7 +285,14 @@ namespace KMines
                 quad.name = "BG_Metal_World";
                 quad.transform.position = new Vector3(0f, -0.02f, 0f);   // lite under rutorna
                 quad.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-                quad.transform.localScale = new Vector3(wUnits + 2f, hUnits + 2f, 1f);
+
+                // ge den lite extra höjd så inget svart syns längst ner
+                float extraHeight = 4f;
+                quad.transform.localScale = new Vector3(
+                    wUnits + 2f,
+                    hUnits + 2f + extraHeight,
+                    1f
+                );
 
                 var spr = Resources.Load<Sprite>("Art/ui_bg/bg_metal_base");
                 var mr = quad.GetComponent<MeshRenderer>();
@@ -296,6 +303,7 @@ namespace KMines
                 mat.renderQueue = 1000;
                 mr.sharedMaterial = mat;
             }
+
 
             // --- VIEWPORT FITTER ---
             var fitGO = new GameObject("ViewportFitter");
