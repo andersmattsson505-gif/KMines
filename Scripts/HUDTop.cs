@@ -14,89 +14,79 @@ namespace KMines
         public VisorScanEffect scanEffect;
 
         [Header("Layout (px @1080x1920 ref)")]
-        public float topBarHeight = 96f;
-        public float sideGutterWidth = 180f;
+        public float topBarHeight = 88f;
+        public float sideGutterWidth = 68f;
 
         [Header("Colors")]
-        public Color topBarColor = new Color(0.07f, 0.09f, 0.11f, 1f);
-        public Color gutterColor = new Color(0.02f, 0.03f, 0.04f, 1f);
-        public Color accentColor = new Color(0.1f, 0.6f, 0.9f, 1f);
-
-        public Color scoreTextColor = Color.white;
-        public Color timerTextColor = Color.yellow;
-
-        public Color missileNormalColor = Color.white;
-        public Color missileArmedColor = new Color(1f, 0.95f, 0.6f, 1f);
-
+        public Color topBarColor = new Color(0.05f, 0.06f, 0.08f, 1f);
+        public Color buttonColor = new Color(0.65f, 0.65f, 0.8f, 1f);
+        public Color missileEnabledColor = Color.white;
+        public Color missileDisabledColor = new Color(1f, 1f, 1f, 0.3f);
         public Color visorEnabledColor = Color.white;
-        public Color visorDisabledColor = new Color(0.4f, 0.4f, 0.4f, 0.7f);
+        public Color visorDisabledColor = new Color(1f, 1f, 1f, 0.3f);
         public Color visorTextEnabledColor = Color.white;
-        public Color visorTextDisabledColor = new Color(0.6f, 0.6f, 0.6f, 0.7f);
+        public Color visorTextDisabledColor = new Color(1f, 1f, 1f, 0.4f);
 
-        // Runtime refs
-        Canvas canvas;
+        [Header("Icons (Resources/Art/...)")]
+        public string missileIconPath = "Art/missile_logo";
+        public string visorIconPath = "Art/visor_pulse";
+
         RectTransform rootRT;
-
         RectTransform topBarRT;
         RectTransform leftGutterRT;
-        RectTransform rightGutterRT;
-        RectTransform accentLineRT;
+        RectTransform rightClusterRT;
 
-        Text scoreLine;
-        Text timerText;
-
-        Button pauseButton;
-        Text pauseGlyphText;
-
-        Button missileButton;
         Image missileIconImg;
         Text missileCountTxt;
+        Button missileButton;
 
-        Button visorButton;
         Image visorIconImg;
         Text visorCountTxt;
+        Button visorButton;
 
         Font runtimeFont;
 
         void Awake()
         {
+            if (!board) board = FindObjectOfType<Board>();
+            if (!loader) loader = FindObjectOfType<LevelLoader>();
+            if (!gameTimer) gameTimer = FindObjectOfType<GameTimer>();
+            if (!gameUI) gameUI = FindObjectOfType<GameUI>();
+            if (!scanEffect) scanEffect = FindObjectOfType<VisorScanEffect>();
+
             runtimeFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        }
+
+        void Start()
+        {
             BuildHUD();
         }
 
-        // -------------------------------------------------
-        // Bygg hela HUD Canvas + element
-        // -------------------------------------------------
+        // -----------------------
+        // BUILD
+        // -----------------------
         void BuildHUD()
         {
-            // Canvas
-            canvas = gameObject.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 20000; // under GameUI (50000), över brädet
+            // Canvas-root (detta gameobjectet)
+            rootRT = GetComponent<RectTransform>();
+            if (!rootRT)
+                rootRT = gameObject.AddComponent<RectTransform>();
 
-            var scaler = gameObject.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1080, 1920);
-            scaler.matchWidthOrHeight = 0.5f;
-
-            gameObject.AddComponent<GraphicRaycaster>();
-
-            rootRT = canvas.GetComponent<RectTransform>();
-            rootRT.anchorMin = new Vector2(0f, 0f);
+            rootRT.anchorMin = new Vector2(0f, 1f);
             rootRT.anchorMax = new Vector2(1f, 1f);
-            rootRT.offsetMin = Vector2.zero;
-            rootRT.offsetMax = Vector2.zero;
-            rootRT.pivot = new Vector2(0.5f, 0.5f);
+            rootRT.pivot = new Vector2(0.5f, 1f);
+            rootRT.offsetMin = new Vector2(0f, -topBarHeight);
+            rootRT.offsetMax = new Vector2(0f, 0f);
 
-            // ---------- Top bar ----------
+            // ---------- Top bar background ----------
             {
                 var go = new GameObject("TopBar");
                 go.transform.SetParent(rootRT, false);
 
                 topBarRT = go.AddComponent<RectTransform>();
-                topBarRT.anchorMin = new Vector2(0f, 1f);
+                topBarRT.anchorMin = new Vector2(0f, 0f);
                 topBarRT.anchorMax = new Vector2(1f, 1f);
-                topBarRT.pivot = new Vector2(0.5f, 1f);
+                topBarRT.pivot = new Vector2(0.5f, 0.5f);
                 topBarRT.offsetMin = new Vector2(0f, -topBarHeight);
                 topBarRT.offsetMax = new Vector2(0f, 0f);
 
@@ -104,7 +94,7 @@ namespace KMines
                 img.color = topBarColor;
             }
 
-            // ---------- Left gutter ----------
+            // ---------- Left gutter (hamburger) ----------
             {
                 var go = new GameObject("LeftGutter");
                 go.transform.SetParent(rootRT, false);
@@ -113,381 +103,171 @@ namespace KMines
                 leftGutterRT.anchorMin = new Vector2(0f, 0f);
                 leftGutterRT.anchorMax = new Vector2(0f, 1f);
                 leftGutterRT.pivot = new Vector2(0f, 1f);
-                leftGutterRT.offsetMin = new Vector2(0f, 0f);
-                leftGutterRT.offsetMax = new Vector2(sideGutterWidth, 0f);
+                leftGutterRT.sizeDelta = new Vector2(sideGutterWidth, 0f);
+                leftGutterRT.anchoredPosition = new Vector2(0f, 0f);
 
-                var img = go.AddComponent<Image>();
-                img.color = gutterColor;
+                var btnGO = new GameObject("MenuButton", typeof(Image), typeof(Button));
+                btnGO.transform.SetParent(leftGutterRT, false);
+
+                var btnRT = btnGO.GetComponent<RectTransform>();
+                btnRT.anchorMin = new Vector2(0f, 1f);
+                btnRT.anchorMax = new Vector2(0f, 1f);
+                btnRT.pivot = new Vector2(0f, 1f);
+                btnRT.sizeDelta = new Vector2(48f, 48f);
+                btnRT.anchoredPosition = new Vector2(12f, -12f);
+
+                var img = btnGO.GetComponent<Image>();
+                img.color = buttonColor;
+
+                var btn = btnGO.GetComponent<Button>();
+                btn.onClick.AddListener(OnMenuClicked);
             }
 
-            // ---------- Right gutter ----------
+            // ---------- Right cluster (missile + visor) ----------
             {
-                var go = new GameObject("RightGutter");
+                var go = new GameObject("RightCluster");
                 go.transform.SetParent(rootRT, false);
 
-                rightGutterRT = go.AddComponent<RectTransform>();
-                rightGutterRT.anchorMin = new Vector2(1f, 0f);
-                rightGutterRT.anchorMax = new Vector2(1f, 1f);
-                rightGutterRT.pivot = new Vector2(1f, 1f);
-                rightGutterRT.offsetMin = new Vector2(-sideGutterWidth, 0f);
-                rightGutterRT.offsetMax = new Vector2(0f, 0f);
-
-                var img = go.AddComponent<Image>();
-                img.color = gutterColor;
-            }
-
-            // ---------- Accent line just under top bar ----------
-            {
-                var go = new GameObject("AccentLine");
-                go.transform.SetParent(rootRT, false);
-
-                accentLineRT = go.AddComponent<RectTransform>();
-                accentLineRT.anchorMin = new Vector2(0f, 1f);
-                accentLineRT.anchorMax = new Vector2(1f, 1f);
-                accentLineRT.pivot = new Vector2(0.5f, 1f);
-                accentLineRT.offsetMin = new Vector2(0f, -topBarHeight - 2f);
-                accentLineRT.offsetMax = new Vector2(0f, -topBarHeight);
-
-                var img = go.AddComponent<Image>();
-                img.color = accentColor;
-            }
-
-            // ---------- Pause (hamburger) knapp ----------
-            {
-                var pauseGO = new GameObject("PauseButton");
-                pauseGO.transform.SetParent(topBarRT, false);
-
-                var pauseRT = pauseGO.AddComponent<RectTransform>();
-                pauseRT.anchorMin = new Vector2(0f, 1f);
-                pauseRT.anchorMax = new Vector2(0f, 1f);
-                pauseRT.pivot = new Vector2(0f, 1f);
-                pauseRT.sizeDelta = new Vector2(60f, 60f);
-                pauseRT.anchoredPosition = new Vector2(16f, -16f);
-
-                var pauseImg = pauseGO.AddComponent<Image>();
-                pauseImg.color = new Color(0.9f, 0.9f, 0.9f, 1f);
-
-                pauseButton = pauseGO.AddComponent<Button>();
-                pauseButton.targetGraphic = pauseImg;
-                pauseButton.onClick.AddListener(OnPauseClicked);
-
-                var glyphGO = new GameObject("Glyph");
-                glyphGO.transform.SetParent(pauseGO.transform, false);
-
-                var glyphRT = glyphGO.AddComponent<RectTransform>();
-                glyphRT.anchorMin = Vector2.zero;
-                glyphRT.anchorMax = Vector2.one;
-                glyphRT.offsetMin = Vector2.zero;
-                glyphRT.offsetMax = Vector2.zero;
-                glyphRT.pivot = new Vector2(0.5f, 0.5f);
-
-                pauseGlyphText = glyphGO.AddComponent<Text>();
-                pauseGlyphText.text = "?";
-                pauseGlyphText.alignment = TextAnchor.MiddleCenter;
-                pauseGlyphText.fontSize = 36;
-                pauseGlyphText.color = Color.black;
-                pauseGlyphText.font = runtimeFont;
-            }
-
-            // ---------- ScoreLine text ----------
-            {
-                var go = new GameObject("ScoreLine");
-                go.transform.SetParent(topBarRT, false);
-
-                var rt = go.AddComponent<RectTransform>();
-                rt.anchorMin = new Vector2(0f, 1f);
-                rt.anchorMax = new Vector2(0f, 1f);
-                rt.pivot = new Vector2(0f, 1f);
-                rt.anchoredPosition = new Vector2(90f, -28f);
-                rt.sizeDelta = new Vector2(800f, 40f);
-
-                scoreLine = go.AddComponent<Text>();
-                scoreLine.font = runtimeFont;
-                scoreLine.fontSize = 36;
-                scoreLine.color = scoreTextColor;
-                scoreLine.alignment = TextAnchor.MiddleLeft;
-                scoreLine.text = "Score 0   Lvl 1   Best 0";
-            }
-
-            // ---------- Timer text ----------
-            {
-                var go = new GameObject("TimerText");
-                go.transform.SetParent(topBarRT, false);
-
-                var rt = go.AddComponent<RectTransform>();
-                rt.anchorMin = new Vector2(0.5f, 1f);
-                rt.anchorMax = new Vector2(0.5f, 1f);
-                rt.pivot = new Vector2(0.5f, 1f);
-                rt.anchoredPosition = new Vector2(0f, -28f);
-                rt.sizeDelta = new Vector2(300f, 40f);
-
-                timerText = go.AddComponent<Text>();
-                timerText.font = runtimeFont;
-                timerText.fontSize = 36;
-                timerText.color = timerTextColor;
-                timerText.alignment = TextAnchor.MiddleCenter;
-                timerText.text = "";
-                timerText.enabled = false;
-            }
-
-            // ---------- RightCluster ----------
-            var rightClusterRT = new GameObject("RightCluster").AddComponent<RectTransform>();
-            {
-                rightClusterRT.transform.SetParent(topBarRT, false);
-                rightClusterRT.anchorMin = new Vector2(1f, 1f);
+                rightClusterRT = go.AddComponent<RectTransform>();
+                rightClusterRT.anchorMin = new Vector2(1f, 0f);
                 rightClusterRT.anchorMax = new Vector2(1f, 1f);
                 rightClusterRT.pivot = new Vector2(1f, 1f);
-                rightClusterRT.anchoredPosition = new Vector2(-16f, -16f);
-                rightClusterRT.sizeDelta = new Vector2(260f, 80f);
-            }
+                rightClusterRT.sizeDelta = new Vector2(280f, 0f);
+                rightClusterRT.anchoredPosition = new Vector2(-12f, 0f);
 
-            // ----- Missile row -----
-            {
-                var row = new GameObject("MissileRow").AddComponent<RectTransform>();
-                row.transform.SetParent(rightClusterRT, false);
-                row.anchorMin = new Vector2(1f, 1f);
-                row.anchorMax = new Vector2(1f, 1f);
-                row.pivot = new Vector2(1f, 1f);
-                row.anchoredPosition = new Vector2(0f, 0f);
-                row.sizeDelta = new Vector2(240f, 32f);
+                // ----- Missile row -----
+                {
+                    var row = new GameObject("MissileRow").AddComponent<RectTransform>();
+                    row.transform.SetParent(rightClusterRT, false);
+                    row.anchorMin = new Vector2(1f, 1f);
+                    row.anchorMax = new Vector2(1f, 1f);
+                    row.pivot = new Vector2(1f, 1f);
+                    row.anchoredPosition = new Vector2(0f, 0f);
+                    row.sizeDelta = new Vector2(240f, 32f);
 
-                var mBtnGO = new GameObject("MissileButton", typeof(Image), typeof(Button));
-                mBtnGO.transform.SetParent(row, false);
-                var mBtnRT = mBtnGO.GetComponent<RectTransform>();
-                mBtnRT.anchorMin = new Vector2(1f, 1f);
-                mBtnRT.anchorMax = new Vector2(1f, 1f);
-                mBtnRT.pivot = new Vector2(1f, 1f);
-                mBtnRT.sizeDelta = new Vector2(32f, 32f);
-                mBtnRT.anchoredPosition = new Vector2(0f, 0f);
+                    var mBtnGO = new GameObject("MissileButton", typeof(Image), typeof(Button));
+                    mBtnGO.transform.SetParent(row, false);
+                    var mBtnRT = mBtnGO.GetComponent<RectTransform>();
+                    mBtnRT.anchorMin = new Vector2(1f, 1f);
+                    mBtnRT.anchorMax = new Vector2(1f, 1f);
+                    mBtnRT.pivot = new Vector2(1f, 1f);
+                    mBtnRT.sizeDelta = new Vector2(32f, 32f);
+                    mBtnRT.anchoredPosition = new Vector2(0f, 0f);
 
-                missileIconImg = mBtnGO.GetComponent<Image>();
-                missileIconImg.raycastTarget = true;
-                missileIconImg.preserveAspect = true;
-                var missileSprite = Resources.Load<Sprite>("Art/missile_logo");
-                if (missileSprite != null)
-                    missileIconImg.sprite = missileSprite;
+                    missileIconImg = mBtnGO.GetComponent<Image>();
+                    missileIconImg.raycastTarget = true;
+                    missileIconImg.preserveAspect = true;
+                    var missileSprite = Resources.Load<Sprite>(missileIconPath);
+                    if (missileSprite != null)
+                        missileIconImg.sprite = missileSprite;
 
-                missileButton = mBtnGO.GetComponent<Button>();
-                missileButton.onClick.AddListener(OnMissileClicked);
+                    missileButton = mBtnGO.GetComponent<Button>();
+                    missileButton.onClick.AddListener(OnMissileClicked);
 
-                var txtGO = new GameObject("MissileCount", typeof(Text));
-                txtGO.transform.SetParent(row, false);
-                missileCountTxt = txtGO.GetComponent<Text>();
-                missileCountTxt.font = runtimeFont;
-                missileCountTxt.fontSize = 32;
-                missileCountTxt.alignment = TextAnchor.MiddleRight;
-                missileCountTxt.color = new Color(0.85f, 0.92f, 1f, 0.9f);
-                missileCountTxt.text = "x0";
-                var txtRT = missileCountTxt.rectTransform;
-                txtRT.anchorMin = new Vector2(1f, 1f);
-                txtRT.anchorMax = new Vector2(1f, 1f);
-                txtRT.pivot = new Vector2(1f, 1f);
-                txtRT.sizeDelta = new Vector2(120f, 32f);
-                txtRT.anchoredPosition = new Vector2(-40f, 0f);
-            }
+                    var txtGO = new GameObject("MissileCount", typeof(Text));
+                    txtGO.transform.SetParent(row, false);
+                    missileCountTxt = txtGO.GetComponent<Text>();
+                    missileCountTxt.font = runtimeFont;
+                    missileCountTxt.fontSize = 32;
+                    missileCountTxt.alignment = TextAnchor.MiddleRight;
+                    missileCountTxt.color = new Color(0.85f, 0.92f, 1f, 0.9f);
+                    missileCountTxt.text = "x0";
 
-            // ----- Visor row -----
-            {
-                var row = new GameObject("VisorRow").AddComponent<RectTransform>();
-                row.transform.SetParent(rightClusterRT, false);
-                row.anchorMin = new Vector2(1f, 1f);
-                row.anchorMax = new Vector2(1f, 1f);
-                row.pivot = new Vector2(1f, 1f);
-                row.anchoredPosition = new Vector2(0f, -36f);
-                row.sizeDelta = new Vector2(240f, 32f);
+                    var txtRT = missileCountTxt.rectTransform;
+                    txtRT.anchorMin = new Vector2(1f, 1f);
+                    txtRT.anchorMax = new Vector2(1f, 1f);
+                    txtRT.pivot = new Vector2(1f, 1f);
+                    txtRT.sizeDelta = new Vector2(120f, 32f);
+                    // nära ikonen
+                    txtRT.anchoredPosition = new Vector2(-8f, 0f);
+                }
 
-                var vBtnGO = new GameObject("VisorButton", typeof(Image), typeof(Button));
-                vBtnGO.transform.SetParent(row, false);
-                var vBtnRT = vBtnGO.GetComponent<RectTransform>();
-                vBtnRT.anchorMin = new Vector2(1f, 1f);
-                vBtnRT.anchorMax = new Vector2(1f, 1f);
-                vBtnRT.pivot = new Vector2(1f, 1f);
-                vBtnRT.sizeDelta = new Vector2(32f, 32f);
-                vBtnRT.anchoredPosition = new Vector2(0f, 0f);
+                // ----- Visor row -----
+                {
+                    var row = new GameObject("VisorRow").AddComponent<RectTransform>();
+                    row.transform.SetParent(rightClusterRT, false);
+                    row.anchorMin = new Vector2(1f, 1f);
+                    row.anchorMax = new Vector2(1f, 1f);
+                    row.pivot = new Vector2(1f, 1f);
+                    // lägg på samma höjd men längre åt vänster
+                    row.anchoredPosition = new Vector2(-140f, 0f);
+                    row.sizeDelta = new Vector2(240f, 32f);
 
-                visorIconImg = vBtnGO.GetComponent<Image>();
-                visorIconImg.raycastTarget = true;
-                visorIconImg.preserveAspect = true;
+                    var vBtnGO = new GameObject("VisorButton", typeof(Image), typeof(Button));
+                    vBtnGO.transform.SetParent(row, false);
+                    var vBtnRT = vBtnGO.GetComponent<RectTransform>();
+                    vBtnRT.anchorMin = new Vector2(1f, 1f);
+                    vBtnRT.anchorMax = new Vector2(1f, 1f);
+                    vBtnRT.pivot = new Vector2(1f, 1f);
+                    vBtnRT.sizeDelta = new Vector2(32f, 32f);
+                    vBtnRT.anchoredPosition = new Vector2(0f, 0f);
 
-                var visorSprite = Resources.Load<Sprite>("Art/visor_pulse");
-                if (visorSprite != null)
-                    visorIconImg.sprite = visorSprite;
+                    visorIconImg = vBtnGO.GetComponent<Image>();
+                    visorIconImg.raycastTarget = true;
+                    visorIconImg.preserveAspect = true;
 
-                visorButton = vBtnGO.GetComponent<Button>();
-                visorButton.onClick.AddListener(OnVisorClicked);
+                    var visorSprite = Resources.Load<Sprite>(visorIconPath);
+                    if (visorSprite != null)
+                        visorIconImg.sprite = visorSprite;
 
-                var vTxtGO = new GameObject("VisorCount", typeof(Text));
-                vTxtGO.transform.SetParent(row, false);
+                    visorButton = vBtnGO.GetComponent<Button>();
+                    visorButton.onClick.AddListener(OnVisorClicked);
 
-                visorCountTxt = vTxtGO.GetComponent<Text>();
-                visorCountTxt.font = runtimeFont;
-                visorCountTxt.fontSize = 32;
-                visorCountTxt.alignment = TextAnchor.MiddleRight;
-                visorCountTxt.text = "x0";
-                visorCountTxt.color = visorTextDisabledColor;
+                    var vTxtGO = new GameObject("VisorCount", typeof(Text));
+                    vTxtGO.transform.SetParent(row, false);
 
-                var vTxtRT = visorCountTxt.rectTransform;
-                vTxtRT.anchorMin = new Vector2(1f, 1f);
-                vTxtRT.anchorMax = new Vector2(1f, 1f);
-                vTxtRT.pivot = new Vector2(1f, 1f);
-                vTxtRT.sizeDelta = new Vector2(120f, 32f);
-                vTxtRT.anchoredPosition = new Vector2(-40f, -4f);
+                    visorCountTxt = vTxtGO.GetComponent<Text>();
+                    visorCountTxt.font = runtimeFont;
+                    visorCountTxt.fontSize = 32;
+                    visorCountTxt.alignment = TextAnchor.MiddleRight;
+                    visorCountTxt.text = "x0";
+                    visorCountTxt.color = visorTextDisabledColor;
+
+                    var vTxtRT = visorCountTxt.rectTransform;
+                    vTxtRT.anchorMin = new Vector2(1f, 1f);
+                    vTxtRT.anchorMax = new Vector2(1f, 1f);
+                    vTxtRT.pivot = new Vector2(1f, 1f);
+                    vTxtRT.sizeDelta = new Vector2(120f, 32f);
+                    // exakt samma rad som missile
+                    vTxtRT.anchoredPosition = new Vector2(-8f, 0f);
+                }
             }
         }
 
         // -------------------------------------------------
         // Button callbacks
         // -------------------------------------------------
-        void OnPauseClicked()
+        void OnMenuClicked()
         {
             if (gameUI != null)
-            {
-                gameUI.ShowPausePanel();
-            }
+                gameUI.TogglePause();
         }
 
         void OnMissileClicked()
         {
             if (board == null) return;
+            if (board.MissileCount() <= 0) return;
 
-            // redan armerad? gör inget (Board disarmar efter skott)
-            if (board.IsMissileArmed())
-                return;
-
-            // slut på missiler? gör inget
-            if (board.MissileCount() <= 0)
-                return;
-
-            // annars arma
             board.ArmMissile();
         }
 
         void OnVisorClicked()
         {
-            // dra en charge
-            bool ok = PlayerInventory.TryConsumePulseVisor();
-            if (!ok) return;
-
-            // kör scaneffekt
             if (scanEffect != null)
-            {
                 scanEffect.PulseRadarSweep();
-            }
         }
 
-        // -------------------------------------------------
-        // Helpers
-        // -------------------------------------------------
-        string FormatTime(float seconds)
+        void Update()
         {
-            int total = Mathf.CeilToInt(seconds);
-            if (total < 0) total = 0;
-            int m = total / 60;
-            int s = total % 60;
-            return $"{m}:{s:00}";
-        }
-
-        // -------------------------------------------------
-        // LateUpdate = vi uppdaterar text/räknare varje frame
-        // -------------------------------------------------
-        void LateUpdate()
-        {
-            // auto-wire
-            if (board == null) board = FindObjectOfType<Board>();
-            if (loader == null) loader = FindObjectOfType<LevelLoader>();
-            if (gameTimer == null) gameTimer = FindObjectOfType<GameTimer>();
-            if (gameUI == null) gameUI = FindObjectOfType<GameUI>();
-            if (scanEffect == null) scanEffect = FindObjectOfType<VisorScanEffect>();
-
-            // ----- SCORE / MODE / BEST -----
-            if (scoreLine != null)
-            {
-                int scoreNow = (board != null) ? board.score : 0;
-
-                GameModeType mode = GameModeType.Campaign;
-                int levelIndex = 0;
-
-                if (GameModeSettings.hasConfig)
-                {
-                    mode = GameModeSettings.current.mode;
-                    levelIndex = GameModeSettings.current.levelIndex;
-                }
-                else
-                {
-                    if (loader != null)
-                        levelIndex = loader.currentIndex;
-                }
-
-                string hudText = "Score " + scoreNow.ToString();
-
-                switch (mode)
-                {
-                    case GameModeType.Campaign:
-                        {
-                            int li = 0;
-                            if (loader != null) li = loader.currentIndex;
-                            int shownLevelNum = li + 1;
-
-                            int best = HighScoreStore.GetHighScore(li);
-
-                            hudText =
-                                "Score " + scoreNow.ToString() +
-                                "   Lvl " + shownLevelNum.ToString() +
-                                "   Best " + best.ToString();
-                            break;
-                        }
-
-                    case GameModeType.Arcade:
-                        {
-                            int bestArc = HighScoreStore.GetArcadeHighScore();
-                            hudText =
-                                "Score " + scoreNow.ToString() +
-                                "   Arcade Best " + bestArc.ToString();
-                            break;
-                        }
-
-                    case GameModeType.Boss:
-                        {
-                            int bestBoss = HighScoreStore.GetBossHighScore();
-                            hudText =
-                                "Score " + scoreNow.ToString() +
-                                "   Boss Best " + bestBoss.ToString();
-                            break;
-                        }
-                }
-
-                scoreLine.text = hudText;
-            }
-
-            // ----- TIMER -----
-            if (timerText != null)
-            {
-                if (gameTimer != null && gameTimer.IsActive())
-                {
-                    timerText.enabled = true;
-                    timerText.text = "TIME " + FormatTime(gameTimer.GetTimeLeft());
-                }
-                else
-                {
-                    timerText.enabled = false;
-                }
-            }
+            if (!board) return;
 
             // ----- MISSILE STATUS -----
-            if (board != null)
+            if (missileCountTxt != null && missileIconImg != null)
             {
-                if (missileCountTxt != null)
-                {
-                    missileCountTxt.text = "x" + board.MissileCount().ToString();
-                }
-
-                if (missileIconImg != null)
-                {
-                    bool armed = board.IsMissileArmed();
-                    missileIconImg.color = armed
-                        ? missileArmedColor
-                        : missileNormalColor;
-                }
+                int m = board.MissileCount();
+                missileCountTxt.text = "x" + m.ToString();
+                bool hasAny = m > 0;
+                missileIconImg.color = hasAny ? missileEnabledColor : missileDisabledColor;
             }
 
             // ----- VISOR STATUS -----
