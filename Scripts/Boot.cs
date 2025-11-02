@@ -32,7 +32,7 @@ namespace KMines
 
         void Start()
         {
-            // --- CAMERA ---
+            // CAMERA
             var cam = Camera.main;
             if (!cam)
             {
@@ -40,7 +40,6 @@ namespace KMines
                 cam = camGO.AddComponent<Camera>();
                 cam.tag = "MainCamera";
             }
-
             cam.orthographic = true;
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0.06f, 0.07f, 0.09f, 1f);
@@ -49,7 +48,7 @@ namespace KMines
             cam.nearClipPlane = 0.1f;
             cam.farClipPlane = 200f;
 
-            // --- EVENT SYSTEM ---
+            // EVENT SYSTEM
             if (!FindObjectOfType<EventSystem>())
             {
                 var esGO = new GameObject("EventSystem");
@@ -61,29 +60,29 @@ namespace KMines
 #endif
             }
 
-            // --- BOARD ---
+            // BOARD
             var boardGO = new GameObject("Board");
             boardGO.transform.position = new Vector3(0f, 0f, -0.8f);
             var board = boardGO.AddComponent<Board>();
 
-            // --- GAME UI ---
+            // GAME UI ROOT
             var uiGO = new GameObject("GameUI");
             var gameUI = uiGO.AddComponent<GameUI>();
             gameUI.SetBoard(board);
 
-            // --- LEVEL LOADER ---
+            // LEVEL LOADER
             var loaderObj = new GameObject("LevelLoader");
             var loader = loaderObj.AddComponent<LevelLoader>();
             loader.board = board;
 
-            // --- WIN/LOSE ---
+            // WIN/LOSE
             var rulesGO = new GameObject("WinLoseManager");
             var rules = rulesGO.AddComponent<WinLoseManager>();
             rules.board = board;
             rules.gameUI = gameUI;
             rules.levelLoader = loader;
 
-            // --- TIMER UI + TIMER ---
+            // TIMER UI + TIMER
             var timerUiGO = new GameObject("TimerUI");
             timerUiGO.AddComponent<TimerUIPlacement>();
             var timerUI = timerUiGO.AddComponent<TimerUI>();
@@ -95,19 +94,19 @@ namespace KMines
             loader.gameTimer = gameTimer;
             rules.gameTimer = gameTimer;
 
-            // --- INPUT ---
+            // INPUT
             var inputGO = new GameObject("Input");
             var smart = inputGO.AddComponent<SmartClickInput>();
             smart.target = board;
             smart.cam = cam;
             smart.rules = rules;
 
-            // --- GAMLA HUD ---
+            // GAMLA HUD
             var hudGO = new GameObject("KaelenHUD");
             var hud = hudGO.AddComponent<KaelenHUD>();
             TryAssignBoard(hud, board);
 
-            // --- MAIN CANVAS ---
+            // MAIN CANVAS
             Canvas targetCanvas = null;
             {
                 var all = FindObjectsOfType<Canvas>();
@@ -133,7 +132,7 @@ namespace KMines
                 }
             }
 
-            // --- HUDTop ---
+            // HUDTop
             var hudTopGO = new GameObject("HUDTop", typeof(RectTransform));
             hudTopGO.transform.SetParent(targetCanvas.transform, false);
             var hudTopRT = hudTopGO.GetComponent<RectTransform>();
@@ -149,33 +148,17 @@ namespace KMines
             hudTop.gameUI = gameUI;
             hudTop.topBarHeight = 140f;
 
-            // --- VisorScanEffect ---
+            // VisorScanEffect
             var visorScanGO = new GameObject("VisorScanEffect");
             var visorScan = visorScanGO.AddComponent<VisorScanEffect>();
             visorScan.board = board;
             hudTop.scanEffect = visorScan;
 
-            // --- Timer UI till canvas ---
+            // Timer UI till canvas
             timerUiGO.transform.SetParent(targetCanvas.transform, false);
             timerUiGO.transform.SetAsLastSibling();
 
-            // --- OM INGA LEVELS ---
-            if (loader.levels == null || loader.levels.Length == 0)
-            {
-                loader.levels = new LevelDef[1];
-                loader.levels[0] = new LevelDef
-                {
-                    width = defaultWidth,
-                    height = defaultHeight,
-                    tileSize = defaultTileSize,
-                    mineDensity = defaultMineDensity,
-                    timed = defaultTimed,
-                    timeLimitSeconds = defaultTimeLimitSeconds
-                };
-                loader.currentIndex = 0;
-            }
-
-            // --- LÄS CONFIG ---
+            // LADDA SPEL
             GameSessionConfig cfg;
             if (GameModeSettings.hasConfig)
             {
@@ -278,7 +261,7 @@ namespace KMines
                     }
             }
 
-            // --- WORLD BG ---
+            // WORLD BG
             {
                 float wUnits = board.width * board.tileSize;
                 float hUnits = board.height * board.tileSize;
@@ -303,7 +286,7 @@ namespace KMines
                 mr.sharedMaterial = mat;
             }
 
-            // --- VIEWPORT FITTER ---
+            // VIEWPORT FITTER
             var fitter = FindObjectOfType<BoardViewportFitter>();
             if (fitter == null)
             {
@@ -323,14 +306,12 @@ namespace KMines
             fitter.extraWorldPadding = 0.35f;
             fitter.updateEveryFrame = true;
 
-            // MOBIL: mindre zoom, men lite större sid-marginal
             if (Application.isMobilePlatform)
             {
-                // öka kanten så cellerna inte nuddar skärmen
-                fitter.uiLeftPx = 48f;
-                fitter.uiRightPx = 48f;
-                // nästan ingen extra shrink – vi vill bara lämna kanten
-                fitter.viewportShrink = 0.98f;
+                // lite snävare på mobil
+                fitter.uiLeftPx = 32f;
+                fitter.uiRightPx = 32f;
+                fitter.viewportShrink = 0.95f;
             }
 
             fitter.FitNow();
@@ -339,7 +320,6 @@ namespace KMines
         static void TryAssignBoard(Component targetComponent, Board boardRef)
         {
             if (targetComponent == null || boardRef == null) return;
-
             var t = targetComponent.GetType();
 
             var f = t.GetField("board", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
