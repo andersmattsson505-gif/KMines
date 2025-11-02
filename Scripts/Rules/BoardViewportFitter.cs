@@ -26,12 +26,26 @@ namespace KMines
         [Header("Desktop/mobile")]
         [Tooltip("Shrink available space so board never touches edges.")]
         public float viewportShrink = 0.9f;
-        [Tooltip("Below this aspect we treat as portrait and fit by height.")]
-        public float portraitAspectThreshold = 0.8f;
+
+        [Tooltip("Below this aspect we treat as portrait and fit by height. 0.3 = phones måste också ta hänsyn till bredd.")]
+        public float portraitAspectThreshold = 0.3f;
+
         public float maxOrtho = 20f;
 
         [Header("Offsets")]
+        [Tooltip("Positive value pushes board DOWN on screen (camera centers a bit higher).")]
         public float verticalBoardOffsetWorld = 0f;
+
+        void Reset()
+        {
+            cam = Camera.main;
+            if (!board) board = FindObjectOfType<Board>();
+
+            if (board && verticalBoardOffsetWorld == 0f)
+                verticalBoardOffsetWorld = board.tileSize * 0.5f;
+        }
+
+        void Start() => FitNow();
 
         void LateUpdate()
         {
@@ -41,73 +55,66 @@ namespace KMines
 
         public void FitNow()
         {
-            if (cam == null || board == null)
-                return;
+            if (!cam || !board) return;
 
-            // board size in world
-            float W = board.width * board.tileSize;
-            float H = board.height * board.tileSize;
+            // board i world
+            float W = Mathf.Max(0.001f, board.width * board.tileSize);
+            float H = Mathf.Max(0.001f, board.height * board.tileSize);
 
-            // screen size (px)
-            float scrW = Screen.width;
-            float scrH = Screen.height;
+            // UI → fraktioner
+            float fTop = uiTopPx / Mathf.Max(1f, referenceResolution.y);
+            float fBottom = uiBottomPx / Mathf.Max(1f, referenceResolution.y);
+            float fLeft = uiLeftPx / Mathf.Max(1f, referenceResolution.x);
+            float fRight = uiRightPx / Mathf.Max(1f, referenceResolution.x);
 
-            // UI -> i pixlar @ referens
-            float scaleX = scrW / referenceResolution.x;
-            float scaleY = scrH / referenceResolution.y;
-
-            float topPx = uiTopPx * scaleY;
-            float bottomPx = uiBottomPx * scaleY;
-            float leftPx = uiLeftPx * scaleX;
-            float rightPx = uiRightPx * scaleX;
-
-#if UNITY_ANDROID || UNITY_IOS
+            // safe area?
             if (includeSafeArea)
             {
-                var sa = Screen.safeArea;
-                // minska med det som redan är borta från safe area
-                float lostLeft = sa.xMin;
-                float lostRight = scrW - sa.xMax;
-                float lostTop = scrH - sa.yMax;
-                float lostBottom = sa.yMin;
+                Rect sa = Screen.safeArea;
+                float sw = Mathf.Max(1f, (float)Screen.width);
+                float sh = Mathf.Max(1f, (float)Screen.height);
 
-                leftPx += lostLeft;
-                rightPx += lostRight;
-                topPx += lostTop;
-                bottomPx += lostBottom;
+                fLeft += sa.xMin / sw;
+                fRight += 1f - (sa.xMax / sw);
+                fBottom += sa.yMin / sh;
+                fTop += 1f - (sa.yMax / sh);
             }
-#endif
 
-            // available fraction (0..1)
-            float availFracW = 1f - ((leftPx + rightPx) / Mathf.Max(1f, scrW));
-            float availFracH = 1f - ((topPx + bottomPx) / Mathf.Max(1f, scrH));
+            // hur mycket av skärmen vi får använda
+            float availFracW = Mathf.Clamp01(1f - fLeft - fRight);
+            float availFracH = Mathf.Clamp01(1f - fTop - fBottom);
 
-            // shrink a bit so board doesn't hug the sides
+            // liten säkerhetsmarginal
             availFracW *= viewportShrink;
             availFracH *= viewportShrink;
 
-            float aspect = (float)scrW / Mathf.Max(1, scrH);
+            float aspect = (float)Screen.width / Mathf.Max(1, Screen.height);
 
-            // how big ortho must be to fit height
+            // “fit by height”
             float sizeByHeight = ((H * 0.5f) + extraWorldPadding) / Mathf.Max(0.01f, availFracH);
 
-            // how big ortho must be to fit width
-            float sizeByWidth = (((W * 0.5f) + extraWorldPadding) / Mathf.Max(0.01f, availFracW)) / Mathf.Max(0.01f, aspect);
+            // “fit by width”
+            float sizeByWidth = (((W * 0.5f) + extraWorldPadding) / Mathf.Max(0.01f, availFracW))
+                                / Mathf.Max(0.01f, aspect);
 
-            // VIKTIGT: mobiler med smalt format ska också ta MAX
-            float finalSize = Mathf.Max(sizeByHeight, sizeByWidth);
+            float finalSize;
+            // FÖRR: if (aspect < 0.8f) → fit by height ⇒ klipper sidorna på mobil
+            // NU: vi sänker till 0.3f så mobiler också får ta hänsyn till bredd
+            if (aspect < portraitAspectThreshold)
+                finalSize = sizeByHeight;
+            else
+                finalSize = Mathf.Max(sizeByHeight, sizeByWidth);
 
-            // clamp
             finalSize = Mathf.Min(finalSize, maxOrtho);
             cam.orthographicSize = finalSize;
 
-            // center camera over board + our offset
+            // centrera kameran över brädet + vårt offset
             var p = cam.transform.position;
             var bp = board.transform.position;
 
             float off = verticalBoardOffsetWorld;
             if (off == 0f && board)
-                off = board.tileSize * 0.5f; // fallback: en halv ruta
+                off = board.tileSize * 0.5f; // fallback
 
             cam.transform.position = new Vector3(bp.x, p.y, bp.z + off);
         }
