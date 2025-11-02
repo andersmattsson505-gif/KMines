@@ -172,7 +172,7 @@ namespace KMines
                 trt.anchorMax = new Vector2(0f, 0.5f);
                 trt.pivot = new Vector2(1f, 0.5f);
                 trt.sizeDelta = new Vector2(72f, 50f);
-                trt.anchoredPosition = new Vector2(-230f, 0f);   // du sa -230f
+                trt.anchoredPosition = new Vector2(130f, 0f);   // du sa -230f
             }
 
             // VISOR
@@ -220,7 +220,7 @@ namespace KMines
                 trt.anchorMax = new Vector2(0f, 0.5f);
                 trt.pivot = new Vector2(1f, 0.5f);
                 trt.sizeDelta = new Vector2(72f, 50f);
-                trt.anchoredPosition = new Vector2(-230f, 0f);   // samma här
+                trt.anchoredPosition = new Vector2(140f, 0f);   // samma här
             }
         }
 
