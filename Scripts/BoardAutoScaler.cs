@@ -5,12 +5,12 @@ namespace KMines
     /// <summary>
     /// Skalar brädet efter kamerans faktiska bredd i runtime.
     /// Poängen: vi låter kameran vara, men gör brädet större/mindre så att
-    /// 9x15 får plats snyggt på smala telefoner.
+    /// det får plats snyggt även på smala telefoner.
     ///
-    /// Lägg detta i scenen (t.ex. ett tomt GO "BoardRuntime"),
-    /// så hittar den Board och Camera själv.
+    /// Viktigt: den här kör i LateUpdate och kan alltså skriva över
+    /// vad BoardViewportFitter gjort tidigare i framen.
     /// </summary>
-    [DefaultExecutionOrder(200)] // körs efter Board (-1000)
+    [DefaultExecutionOrder(200)] // körs efter Board/Boot/Fitter
     public class BoardAutoScaler : MonoBehaviour
     {
         [Tooltip("Om tomt letar vi upp Board med FindObjectOfType varje frame tills vi hittar den.")]
@@ -20,8 +20,8 @@ namespace KMines
         public Camera targetCamera;
 
         [Range(0.5f, 1.1f)]
-        [Tooltip("Hur stor del av kamera-bredden brädet får ta (0.92 ≈ 92%)")]
-        public float screenFill = 0.92f;
+        [Tooltip("Hur stor del av kamera-bredden brädet får ta (0.80 ≈ 80%)")]
+        public float screenFill = 0.80f;   // SÄNKT från 0.92f för mobil
 
         [Tooltip("Kör varje frame (true) eller bara första gången (false).")]
         public bool continuous = true;
@@ -56,7 +56,6 @@ namespace KMines
             if (targetCamera == null)
                 return;
 
-            // vi utgår från att kameran är ortografisk top-down
             if (!targetCamera.orthographic)
                 return;
 
@@ -66,13 +65,13 @@ namespace KMines
 
             // brädets world-bredd före skalning
             float boardBaseWidth = board.width * board.tileSize;
-
             if (boardBaseWidth <= Mathf.Epsilon)
                 return;
 
-            // vi vill att brädet ska ta t.ex. 92% av kamera-bredden
-            float wantedWidth = camWidth * screenFill;
+            // clamp så vi inte råkar gå över 0.9 på mobil
+            float fill = Mathf.Clamp(screenFill, 0.5f, 0.9f);
 
+            float wantedWidth = camWidth * fill;
             float scale = wantedWidth / boardBaseWidth;
 
             // applicera på X och Z (Z för att behålla proportionen)
