@@ -218,12 +218,23 @@ namespace KMines
         public Cell WorldToCell(Vector3 worldPos)
         {
             Vector3 local = worldPos - transform.position;
+
+            // vi sänkte alla rutor med verticalGridOffset*ruta i Build()
+            // så här måste vi ta bort samma offset innan vi räknar index
+            float zCorrected = local.z + (verticalGridOffset * tileSize);
+
             float localX = (local.x / tileSize) + (width - 1) * 0.5f;
-            float localY = (local.z / tileSize) + (height - 1) * 0.5f;
-            int x = Mathf.Clamp(Mathf.RoundToInt(localX), 0, width - 1);
-            int y = Mathf.Clamp(Mathf.RoundToInt(localY), 0, height - 1);
+            float localY = (zCorrected / tileSize) + (height - 1) * 0.5f;
+
+            int x = Mathf.RoundToInt(localX);
+            int y = Mathf.RoundToInt(localY);
+
+            if (x < 0 || y < 0 || x >= width || y >= height)
+                return null;
+
             return grid[x, y];
         }
+
 
         public void ClickCell(Cell cell)
         {
