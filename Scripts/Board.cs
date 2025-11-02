@@ -13,10 +13,10 @@ namespace KMines
         [Header("Layout")]
         public int width = 9;
         public int height = 15;
-
-        // Boot + LevelLoader använder detta namnet
         [Tooltip("Storlek på 1 ruta i world units")]
         public float tileSize = 1.0f;
+        [Tooltip("Positivt värde flyttar hela rutnätet NER på skärmen (i +Z)")]
+        public float verticalGridOffset = 0.5f;   // i "rutor"
 
         [Header("Mines")]
         [Tooltip("0.16 = 16% av rutorna blir minor")]
@@ -26,7 +26,6 @@ namespace KMines
         [Tooltip("Om tomma laddas från Resources/Art/…")]
         public Texture2D closedTex;
         public Texture2D openTex;
-
         [Tooltip("Root att lägga alla celler under. Om null används detta GameObject.")]
         public Transform cellRoot;
 
@@ -61,13 +60,11 @@ namespace KMines
         [HideInInspector] public Color accentColorForHUD = new Color(0.1f, 0.6f, 0.9f, 1f);
 
         public int score = 0;
-
         bool firstClickDone = false;
 
         void Awake()
         {
-            if (!cellRoot)
-                cellRoot = this.transform;
+            if (!cellRoot) cellRoot = this.transform;
         }
 
         void Start()
@@ -81,10 +78,8 @@ namespace KMines
         public void Build()
         {
             // 1) laddning av standard-texturer
-            if (closedTex == null)
-                closedTex = Resources.Load<Texture2D>("Art/tile_closed");
-            if (openTex == null)
-                openTex = Resources.Load<Texture2D>("Art/tile_open");
+            if (closedTex == null) closedTex = Resources.Load<Texture2D>("Art/tile_closed");
+            if (openTex == null) openTex = Resources.Load<Texture2D>("Art/tile_open");
 
             // 2) skapa arrayer
             grid = new Cell[width, height];
@@ -92,17 +87,15 @@ namespace KMines
             flagged = new bool[width, height];
             near = new int[width, height];
 
-            // 3) rensa gamla celler (om vi t.ex. laddar om nivå)
+            // 3) rensa gamla celler
             if (cellRoot != null)
             {
                 for (int i = cellRoot.childCount - 1; i >= 0; i--)
                 {
                     var ch = cellRoot.GetChild(i);
 #if UNITY_EDITOR
-                    if (!Application.isPlaying)
-                        DestroyImmediate(ch.gameObject);
-                    else
-                        Destroy(ch.gameObject);
+                    if (!Application.isPlaying) DestroyImmediate(ch.gameObject);
+                    else Destroy(ch.gameObject);
 #else
                     Destroy(ch.gameObject);
 #endif
@@ -116,45 +109,44 @@ namespace KMines
             // 5) räkna antal runt
             RecalcNear();
 
-            // 6) skapa alla celler som rena GameObjects + AddComponent<Cell>()
-            //    (ingen prefab!)
+            // 6) skapa alla celler
             float offX = -(width - 1) * 0.5f * tileSize;
             float offZ = -(height - 1) * 0.5f * tileSize;
+
+            // vår extra-offset (i rutor → world)
+            float worldOffsetZ = verticalGridOffset * tileSize;
 
             for (int y = 0; y < height; y++)
             {
                 for (int x = 0; x < width; x++)
                 {
-                    // world-pos så att brädet hamnar centrerat
-                    Vector3 pos = new Vector3(offX + x * tileSize, 0f, offZ + y * tileSize);
+                    Vector3 pos = new Vector3(
+                        offX + x * tileSize,
+                        0f,
+                        offZ + y * tileSize - worldOffsetZ   // flytta allt lite ner
+                    );
 
                     var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
                     go.name = $"Cell_{x}_{y}";
                     go.transform.SetParent(cellRoot, false);
                     go.transform.localPosition = pos;
-                    go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); // så den ligger plant
-                    go.transform.localScale = Vector3.one; // Cell.Init fixar visuell scaling
+                    go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                    go.transform.localScale = Vector3.one;
 
-                    // ta bort collider vi inte vill ha
                     var col = go.GetComponent<Collider>();
                     if (col) Destroy(col);
 
                     var cell = go.AddComponent<Cell>();
                     bool hasMine = mines[x, y];
                     int nearCount = near[x, y];
-
-                    // init med våra texturer
                     cell.Init(this, x, y, hasMine, nearCount, tileSize, closedTex, openTex);
-
                     grid[x, y] = cell;
                 }
             }
 
             // 7) missiles
-            if (missilesEnabled)
-                missiles = startMissiles;
-            else
-                missiles = 0;
+            if (missilesEnabled) missiles = startMissiles;
+            else missiles = 0;
             missileArmed = false;
 
             // 8) score reset
@@ -167,7 +159,6 @@ namespace KMines
             int placed = 0;
             int max = width * height;
             System.Random rng = new System.Random();
-
             while (placed < count && placed < max)
             {
                 int x = rng.Next(0, width);
@@ -205,7 +196,7 @@ namespace KMines
         }
 
         // -------------------------------------------------
-        // INPUT API (anropas från SmartClickInput)
+        // INPUT API
         // -------------------------------------------------
         public void ClickAt(Vector3 worldPos)
         {
@@ -217,10 +208,8 @@ namespace KMines
         {
             var cell = WorldToCell(worldPos);
             if (cell == null) return;
-
             int x = cell.x;
             int y = cell.y;
-
             bool now = !flagged[x, y];
             flagged[x, y] = now;
             cell.SetFlag(now);
@@ -228,29 +217,21 @@ namespace KMines
 
         public Cell WorldToCell(Vector3 worldPos)
         {
-            // world → board-lokal (din Board ligger på t.ex. z = -0.8f i Boot)
             Vector3 local = worldPos - transform.position;
-
-            // dina celler ligger centrerat runt (0,0)
             float localX = (local.x / tileSize) + (width - 1) * 0.5f;
             float localY = (local.z / tileSize) + (height - 1) * 0.5f;
-
             int x = Mathf.Clamp(Mathf.RoundToInt(localX), 0, width - 1);
             int y = Mathf.Clamp(Mathf.RoundToInt(localY), 0, height - 1);
-
             return grid[x, y];
         }
-
 
         public void ClickCell(Cell cell)
         {
             if (cell == null) return;
             int x = cell.x;
             int y = cell.y;
-
             if (cell.opened) return;
 
-            // första klicket ska vara säkert
             if (!firstClickDone)
             {
                 firstClickDone = true;
@@ -282,7 +263,6 @@ namespace KMines
                 {
                     if (x == fromX && y == fromY) continue;
                     if (mines[x, y]) continue;
-
                     mines[x, y] = true;
                     mines[fromX, fromY] = false;
                     return true;
@@ -312,14 +292,11 @@ namespace KMines
                 c.near = near[x, y];
                 c.Open(false);
 
-                // score
                 score += (near[x, y] > 0) ? scorePerNumber : scorePerSafe;
 
-                // ev. tidbonus
                 if (bonusPerSafeReveal > 0f && gameTimer != null && gameTimer.IsActive())
                     gameTimer.AddTime(bonusPerSafeReveal);
 
-                // flood bara på 0-rutor
                 if (near[x, y] == 0)
                 {
                     q.Enqueue(new Vector2Int(x - 1, y));
@@ -331,7 +308,7 @@ namespace KMines
         }
 
         // -------------------------------------------------
-        // MISSILE-API (anropas från HUD/MissileUI)
+        // MISSILE-API
         // -------------------------------------------------
         public int MissileCount() => missiles;
         public bool IsMissileArmed() => missileArmed && missiles > 0;
@@ -359,25 +336,20 @@ namespace KMines
             if (center == null) return;
             if (!IsMissileArmed()) return;
 
-            // grace
             var wlm = FindObjectOfType<WinLoseManager>();
             if (wlm != null) wlm.BeginMissileGrace(0.35f);
 
             missiles = Mathf.Max(0, missiles - 1);
-
             int cx = center.x;
             int cy = center.y;
 
-            // ta bort minor 3x3
             for (int y = cy - 1; y <= cy + 1; y++)
             {
                 for (int x = cx - 1; x <= cx + 1; x++)
                 {
                     if (x < 0 || y < 0 || x >= width || y >= height) continue;
-
                     bool wasMine = mines[x, y];
                     mines[x, y] = false;
-
                     var c = grid[x, y];
                     if (c != null)
                     {
@@ -390,23 +362,23 @@ namespace KMines
                 }
             }
 
-            // recalc runt 5x5
             for (int y = cy - 2; y <= cy + 2; y++)
+            {
                 for (int x = cx - 2; x <= cx + 2; x++)
-                    if (!(x < 0 || y < 0 || x >= width || y >= height))
-                        near[x, y] = CountNear8(x, y);
+                {
+                    if (x < 0 || y < 0 || x >= width || y >= height) continue;
+                    near[x, y] = CountNear8(x, y);
+                }
+            }
 
-            // öppna 3x3
             for (int y = cy - 1; y <= cy + 1; y++)
             {
                 for (int x = cx - 1; x <= cx + 1; x++)
                 {
                     if (x < 0 || y < 0 || x >= width || y >= height) continue;
-
                     flagged[x, y] = false;
                     var c = grid[x, y];
                     if (c == null) continue;
-
                     c.near = near[x, y];
                     c.Open(false);
 
@@ -420,21 +392,16 @@ namespace KMines
         }
 
         // -------------------------------------------------
-        // Tema (Boot anropar detta)
+        // Tema
         // -------------------------------------------------
         public void SetTheme(string themeId)
         {
-            if (string.IsNullOrEmpty(themeId))
-                themeId = "grass";
-
+            if (string.IsNullOrEmpty(themeId)) themeId = "grass";
             currentTheme = themeId;
 
-            // hämta färger från ThemeLibrary så HUD får rätt färg
             var tl = ThemeLibrary.GetTheme(themeId);
             panelColorForHUD = tl.backplateColor;
-            accentColorForHUD = new Color(1f, 0.6f, 0.2f, 1f); // kan tweakas
-
-            // om vi vill byta sprite/texturer här kan vi göra det senare
+            accentColorForHUD = new Color(1f, 0.6f, 0.2f, 1f);
         }
 
         // -------------------------------------------------
@@ -444,9 +411,13 @@ namespace KMines
         {
             int correct = 0;
             for (int y = 0; y < height; y++)
+            {
                 for (int x = 0; x < width; x++)
+                {
                     if (flagged[x, y] && mines[x, y])
                         correct++;
+                }
+            }
             return correct;
         }
 
