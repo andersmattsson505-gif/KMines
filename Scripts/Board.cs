@@ -1,404 +1,280 @@
-using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
+using System.Reflection;
 
 namespace KMines
 {
-    [DisallowMultipleComponent]
-    [DefaultExecutionOrder(-1000)]
-    public class Board : MonoBehaviour
+    [DefaultExecutionOrder(10000)]
+    public class HUDTop : MonoBehaviour
     {
+        [Header("Auto-wired")]
+        public Board board;
+        public LevelLoader loader;
+        public GameTimer gameTimer;
+        public GameUI gameUI;
+        public VisorScanEffect scanEffect;
+
         [Header("Layout")]
-        public int width = 9;
-        public int height = 15;
-        public float tileSize = 1.0f;
-        public float verticalGridOffset = 0.5f;
+        public float topBarHeight = 140f;      // matchar Boot
+        public float sideGutterWidth = 68f;
 
-        [Header("Mines")]
-        public float mineDensity = 0.16f;
+        [Header("Sizes")]
+        public float hitSize = 110f;
+        public float iconSize = 96f;
+        public int countFontSize = 44;
 
-        [Header("Visuals")]
-        public Texture2D closedTex;
-        public Texture2D openTex;
-        public Transform cellRoot;
+        [Header("Colors")]
+        public Color topBarColor = new Color(0f, 0f, 0f, 0f);     // transparent
+        public Color missileEnabledColor = Color.white;
+        public Color missileDisabledColor = new Color(1f, 1f, 1f, 0.25f);
+        public Color missileArmedColor = new Color(1f, 0.75f, 0.35f, 1f);
+        public Color visorEnabledColor = Color.white;
+        public Color visorDisabledColor = new Color(1f, 1f, 1f, 0.25f);
+        public Color visorTextEnabledColor = Color.white;
+        public Color visorTextDisabledColor = new Color(1f, 1f, 1f, 0.35f);
 
-        [Header("Score")]
-        public int scorePerSafe = 1000;
-        public int scorePerNumber = 1500;
+        [Header("Icons")]
+        public string missileIconPath = "Art/missile_logo";
+        public string visorIconPath = "Art/visor_pulse";
 
-        [Header("Missiles")]
-        [SerializeField] int startMissiles = 3;
-
-        [Header("Themes (valfritt)")]
-        public List<ThemeDef> themes = new List<ThemeDef>();
-        string currentTheme = "grass";
-
-        public Cell[,] grid;
-        public bool[,] mines;
-        public bool[,] flagged;
-        public int[,] near;
-
-        int missiles;
-        bool missileArmed;
-        bool missilesEnabled = true;
-
-        [HideInInspector] public GameTimer gameTimer;
-        [HideInInspector] public float bonusPerSafeReveal = 0f;
-
-        [HideInInspector] public Color panelColorForHUD = new Color(0.07f, 0.09f, 0.11f, 1f);
-        [HideInInspector] public Color accentColorForHUD = new Color(0.1f, 0.6f, 0.9f, 1f);
-
-        public int score = 0;
-        bool firstClickDone = false;
+        Image missileIconImg;
+        Text missileCountTxt;
+        Image visorIconImg;
+        Text visorCountTxt;
+        Font runtimeFont;
 
         void Awake()
         {
-            if (!cellRoot) cellRoot = this.transform;
+            if (!board) board = FindObjectOfType<Board>();
+            if (!loader) loader = FindObjectOfType<LevelLoader>();
+            if (!gameTimer) gameTimer = FindObjectOfType<GameTimer>();
+            if (!gameUI) gameUI = FindObjectOfType<GameUI>();
+            if (!scanEffect) scanEffect = FindObjectOfType<VisorScanEffect>();
+
+            runtimeFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         }
 
         void Start()
         {
-            Build();
+            BuildHUD();
         }
 
-        public void Build()
+        void BuildHUD()
         {
-            if (closedTex == null) closedTex = Resources.Load<Texture2D>("Art/tile_closed");
-            if (openTex == null) openTex = Resources.Load<Texture2D>("Art/tile_open");
+            var rt = GetComponent<RectTransform>() ?? gameObject.AddComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.offsetMin = new Vector2(0f, -topBarHeight);
+            rt.offsetMax = new Vector2(0f, 0f);
 
-            grid = new Cell[width, height];
-            mines = new bool[width, height];
-            flagged = new bool[width, height];
-            near = new int[width, height];
+            // BG (osynlig)
+            var bg = new GameObject("BG", typeof(Image));
+            bg.transform.SetParent(rt, false);
+            var bgRT = bg.GetComponent<RectTransform>();
+            bgRT.anchorMin = Vector2.zero;
+            bgRT.anchorMax = Vector2.one;
+            bgRT.offsetMin = Vector2.zero;
+            bgRT.offsetMax = Vector2.zero;
+            bg.GetComponent<Image>().color = topBarColor;
 
-            if (cellRoot != null)
+            // MENU (hamburger) – sänkt ~36px extra
             {
-                for (int i = cellRoot.childCount - 1; i >= 0; i--)
+                var btn = new GameObject("MenuButton", typeof(RectTransform), typeof(Image), typeof(Button));
+                btn.transform.SetParent(rt, false);
+                var brt = btn.GetComponent<RectTransform>();
+                brt.anchorMin = new Vector2(0f, 1f);
+                brt.anchorMax = new Vector2(0f, 1f);
+                brt.pivot = new Vector2(0f, 1f);
+                brt.sizeDelta = new Vector2(60f, 60f);
+                brt.anchoredPosition = new Vector2(14f, -50f);
+
+                var bImg = btn.GetComponent<Image>();
+                bImg.color = new Color(1f, 1f, 1f, 0f);
+                bImg.raycastTarget = true;
+
+                float lineWidth = 32f;
+                float lineHeight = 4f;
+                float gap = 8f;
+                float startY = 10f;
+
+                for (int i = 0; i < 3; i++)
                 {
-                    var ch = cellRoot.GetChild(i);
-#if UNITY_EDITOR
-                    if (!Application.isPlaying) DestroyImmediate(ch.gameObject);
-                    else Destroy(ch.gameObject);
-#else
-                    Destroy(ch.gameObject);
-#endif
+                    var line = new GameObject("Line" + i, typeof(RectTransform), typeof(Image));
+                    line.transform.SetParent(btn.transform, false);
+                    var lrt = line.GetComponent<RectTransform>();
+                    lrt.anchorMin = new Vector2(0.5f, 0.5f);
+                    lrt.anchorMax = new Vector2(0.5f, 0.5f);
+                    lrt.pivot = new Vector2(0.5f, 0.5f);
+                    lrt.sizeDelta = new Vector2(lineWidth, lineHeight);
+                    lrt.anchoredPosition = new Vector2(0f, startY - i * (lineHeight + gap));
+                    var limg = line.GetComponent<Image>();
+                    limg.color = new Color(0.9f, 0.95f, 1f, 1f);
                 }
+
+                btn.GetComponent<Button>().onClick.AddListener(OnMenuClicked);
             }
 
-            int mineCount = Mathf.RoundToInt(width * height * Mathf.Clamp01(mineDensity));
-            PlaceMinesRandom(mineCount);
-            RecalcNear();
+            // RIGHT CLUSTER – sänkt ca 35px
+            var cluster = new GameObject("RightCluster", typeof(RectTransform));
+            cluster.transform.SetParent(rt, false);
+            var cr = cluster.GetComponent<RectTransform>();
+            cr.anchorMin = new Vector2(1f, 1f);
+            cr.anchorMax = new Vector2(1f, 1f);
+            cr.pivot = new Vector2(1f, 1f);
+            cr.sizeDelta = new Vector2(460f, topBarHeight);
+            cr.anchoredPosition = new Vector2(-12f, -35f);
 
-            float offX = -(width - 1) * 0.5f * tileSize;
-            float offZ = -(height - 1) * 0.5f * tileSize;
-            float worldOffsetZ = verticalGridOffset * tileSize;
-
-            for (int y = 0; y < height; y++)
+            // MISSILE
             {
-                for (int x = 0; x < width; x++)
-                {
-                    Vector3 pos = new Vector3(
-                        offX + x * tileSize,
-                        0f,
-                        offZ + y * tileSize - worldOffsetZ
-                    );
+                var btn = new GameObject("MissileButton", typeof(RectTransform), typeof(Image), typeof(Button));
+                btn.transform.SetParent(cr, false);
+                var brt = btn.GetComponent<RectTransform>();
+                brt.anchorMin = new Vector2(1f, 0.5f);
+                brt.anchorMax = new Vector2(1f, 0.5f);
+                brt.pivot = new Vector2(1f, 0.5f);
+                brt.sizeDelta = new Vector2(hitSize, hitSize);
+                brt.anchoredPosition = new Vector2(-100f, 0f);
 
-                    var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                    go.name = $"Cell_{x}_{y}";
-                    go.transform.SetParent(cellRoot, false);
-                    go.transform.localPosition = pos;
-                    go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                var bImg = btn.GetComponent<Image>();
+                bImg.color = new Color(1f, 1f, 1f, 0f);
+                bImg.raycastTarget = true;
 
-                    // VISUELL skala – bara lite mindre på RIKTIG mobil
-                    float visualScale = tileSize;
-                    if (Application.isMobilePlatform)
-                        visualScale = tileSize * 0.95f;
+                btn.GetComponent<Button>().onClick.AddListener(OnMissileClicked);
 
-                    go.transform.localScale = new Vector3(visualScale, visualScale, 1f);
+                var icon = new GameObject("Icon", typeof(RectTransform), typeof(Image));
+                icon.transform.SetParent(btn.transform, false);
+                var irt = icon.GetComponent<RectTransform>();
+                irt.anchorMin = new Vector2(0.5f, 0.5f);
+                irt.anchorMax = new Vector2(0.5f, 0.5f);
+                irt.pivot = new Vector2(0.5f, 0.5f);
+                irt.sizeDelta = new Vector2(iconSize, iconSize);
+                irt.anchoredPosition = Vector2.zero;
 
-                    var col = go.GetComponent<Collider>();
-                    if (col) Destroy(col);
+                missileIconImg = icon.GetComponent<Image>();
+                missileIconImg.preserveAspect = true;
+                var mspr = Resources.Load<Sprite>(missileIconPath);
+                if (mspr) missileIconImg.sprite = mspr;
 
-                    var cell = go.AddComponent<Cell>();
-                    bool hasMine = mines[x, y];
-                    int nearCount = near[x, y];
-                    cell.Init(this, x, y, hasMine, nearCount, tileSize, closedTex, openTex);
-                    grid[x, y] = cell;
-                }
+                var tgo = new GameObject("MissileCount", typeof(Text));
+                tgo.transform.SetParent(btn.transform, false);
+                missileCountTxt = tgo.GetComponent<Text>();
+                missileCountTxt.font = runtimeFont;
+                missileCountTxt.fontSize = countFontSize;
+                missileCountTxt.alignment = TextAnchor.MiddleRight;
+                missileCountTxt.color = new Color(0.85f, 0.92f, 1f, 0.9f);
+                missileCountTxt.text = "x0";
+
+                var trt = missileCountTxt.rectTransform;
+                trt.anchorMin = new Vector2(0f, 0.5f);
+                trt.anchorMax = new Vector2(0f, 0.5f);
+                trt.pivot = new Vector2(1f, 0.5f);
+                trt.sizeDelta = new Vector2(72f, 50f);
+                trt.anchoredPosition = new Vector2(130f, 0f);   // din justering
             }
 
-            if (missilesEnabled) missiles = startMissiles;
-            else missiles = 0;
-            missileArmed = false;
-
-            score = 0;
-            firstClickDone = false;
-        }
-
-        void PlaceMinesRandom(int count)
-        {
-            int placed = 0;
-            int max = width * height;
-            System.Random rng = new System.Random();
-            while (placed < count && placed < max)
+            // VISOR
             {
-                int x = rng.Next(0, width);
-                int y = rng.Next(0, height);
-                if (mines[x, y]) continue;
-                mines[x, y] = true;
-                placed++;
+                var btn = new GameObject("VisorButton", typeof(RectTransform), typeof(Image), typeof(Button));
+                btn.transform.SetParent(cr, false);
+                var brt = btn.GetComponent<RectTransform>();
+                brt.anchorMin = new Vector2(1f, 0.5f);
+                brt.anchorMax = new Vector2(1f, 0.5f);
+                brt.pivot = new Vector2(1f, 0.5f);
+                brt.sizeDelta = new Vector2(hitSize, hitSize);
+                brt.anchoredPosition = new Vector2(-(20f + hitSize + 150f), 0f);
+
+                var bImg = btn.GetComponent<Image>();
+                bImg.color = new Color(1f, 1f, 1f, 0f);
+                bImg.raycastTarget = true;
+
+                btn.GetComponent<Button>().onClick.AddListener(OnVisorClicked);
+
+                var icon = new GameObject("Icon", typeof(RectTransform), typeof(Image));
+                icon.transform.SetParent(btn.transform, false);
+                var irt = icon.GetComponent<RectTransform>();
+                irt.anchorMin = new Vector2(0.5f, 0.5f);
+                irt.anchorMax = new Vector2(0.5f, 0.5f);
+                irt.pivot = new Vector2(0.5f, 0.5f);
+                irt.sizeDelta = new Vector2(iconSize, iconSize);
+                irt.anchoredPosition = Vector2.zero;
+
+                visorIconImg = icon.GetComponent<Image>();
+                visorIconImg.preserveAspect = true;
+                var vspr = Resources.Load<Sprite>(visorIconPath);
+                if (vspr) visorIconImg.sprite = vspr;
+
+                var tgo = new GameObject("VisorCount", typeof(Text));
+                tgo.transform.SetParent(btn.transform, false);
+                visorCountTxt = tgo.GetComponent<Text>();
+                visorCountTxt.font = runtimeFont;
+                visorCountTxt.fontSize = countFontSize;
+                visorCountTxt.alignment = TextAnchor.MiddleRight;
+                visorCountTxt.text = "x0";
+                visorCountTxt.color = visorTextDisabledColor;
+
+                var trt = visorCountTxt.rectTransform;
+                trt.anchorMin = new Vector2(0f, 0.5f);
+                trt.anchorMax = new Vector2(0f, 0.5f);
+                trt.pivot = new Vector2(1f, 0.5f);
+                trt.sizeDelta = new Vector2(72f, 50f);
+                trt.anchoredPosition = new Vector2(140f, 0f);   // din justering
             }
         }
 
-        void RecalcNear()
+        void OnMenuClicked()
         {
-            for (int y = 0; y < height; y++)
+            if (gameUI != null)
+                gameUI.ShowPausePanel();
+        }
+
+        void OnMissileClicked()
+        {
+            if (board == null) return;
+
+            if (board.IsMissileArmed())
             {
-                for (int x = 0; x < width; x++)
-                {
-                    near[x, y] = CountNear8(x, y);
-                }
-            }
-        }
-
-        int CountNear8(int cx, int cy)
-        {
-            int cnt = 0;
-            for (int y = cy - 1; y <= cy + 1; y++)
-            {
-                for (int x = cx - 1; x <= cx + 1; x++)
-                {
-                    if (x == cx && y == cy) continue;
-                    if (x < 0 || y < 0 || x >= width || y >= height) continue;
-                    if (mines[x, y]) cnt++;
-                }
-            }
-            return cnt;
-        }
-
-        public void ClickAt(Vector3 worldPos)
-        {
-            var cell = WorldToCell(worldPos);
-            ClickCell(cell);
-        }
-
-        public void ToggleFlagAt(Vector3 worldPos)
-        {
-            var cell = WorldToCell(worldPos);
-            if (cell == null) return;
-            int x = cell.x;
-            int y = cell.y;
-            bool now = !flagged[x, y];
-            flagged[x, y] = now;
-            cell.SetFlag(now);
-        }
-
-        public Cell WorldToCell(Vector3 worldPos)
-        {
-            Vector3 local = worldPos - transform.position;
-            float correctedZ = local.z + (verticalGridOffset * tileSize);
-
-            float localX = (local.x / tileSize) + (width - 1) * 0.5f;
-            float localY = (correctedZ / tileSize) + (height - 1) * 0.5f;
-
-            int x = Mathf.Clamp(Mathf.RoundToInt(localX), 0, width - 1);
-            int y = Mathf.Clamp(Mathf.RoundToInt(localY), 0, height - 1);
-            return grid[x, y];
-        }
-
-        public void ClickCell(Cell cell)
-        {
-            if (cell == null) return;
-            int x = cell.x;
-            int y = cell.y;
-            if (cell.opened) return;
-
-            if (!firstClickDone)
-            {
-                firstClickDone = true;
-                if (mines[x, y])
-                {
-                    if (TryRelocateMine(x, y))
-                    {
-                        RecalcNear();
-                        RevealFrom4(x, y);
-                        return;
-                    }
-                }
-            }
-
-            if (mines[x, y])
-            {
-                cell.Open(true);
+                var fi = typeof(Board).GetField("missileArmed", BindingFlags.Instance | BindingFlags.NonPublic);
+                if (fi != null) fi.SetValue(board, false);
                 return;
             }
 
-            RevealFrom4(x, y);
+            board.ArmMissile();
         }
 
-        bool TryRelocateMine(int fromX, int fromY)
+        void OnVisorClicked()
         {
-            for (int y = 0; y < height; y++)
+            bool ok = PlayerInventory.TryConsumePulseVisor();
+            if (!ok) return;
+
+            if (scanEffect != null)
+                scanEffect.PulseRadarSweep();
+        }
+
+        void Update()
+        {
+            // missile
+            if (board != null && missileIconImg != null && missileCountTxt != null)
             {
-                for (int x = 0; x < width; x++)
-                {
-                    if (x == fromX && y == fromY) continue;
-                    if (mines[x, y]) continue;
-                    mines[x, y] = true;
-                    mines[fromX, fromY] = false;
-                    return true;
-                }
-            }
-            return false;
-        }
+                int m = board.MissileCount();
+                missileCountTxt.text = "x" + m;
 
-        void RevealFrom4(int sx, int sy)
-        {
-            var q = new Queue<Vector2Int>();
-            q.Enqueue(new Vector2Int(sx, sy));
-
-            while (q.Count > 0)
-            {
-                var v = q.Dequeue();
-                int x = v.x;
-                int y = v.y;
-                if (x < 0 || y < 0 || x >= width || y >= height) continue;
-
-                var c = grid[x, y];
-                if (c == null) continue;
-                if (c.opened) continue;
-                if (flagged[x, y]) continue;
-                if (mines[x, y]) continue;
-
-                c.near = near[x, y];
-                c.Open(false);
-
-                score += (near[x, y] > 0) ? scorePerNumber : scorePerSafe;
-
-                if (bonusPerSafeReveal > 0f && gameTimer != null && gameTimer.IsActive())
-                    gameTimer.AddTime(bonusPerSafeReveal);
-
-                if (near[x, y] == 0)
-                {
-                    q.Enqueue(new Vector2Int(x - 1, y));
-                    q.Enqueue(new Vector2Int(x + 1, y));
-                    q.Enqueue(new Vector2Int(x, y - 1));
-                    q.Enqueue(new Vector2Int(x, y + 1));
-                }
-            }
-        }
-
-        public int MissileCount() => missiles;
-        public bool IsMissileArmed() => missileArmed && missiles > 0;
-
-        public void SetMissilesEnabled(bool enabled) => missilesEnabled = enabled;
-
-        public void ArmMissile()
-        {
-            if (!missilesEnabled) return;
-            if (missiles <= 0) return;
-            missileArmed = true;
-        }
-
-        public void UseMissileAt(Vector3 worldPoint)
-        {
-            var cell = WorldToCell(worldPoint);
-            UseMissileAtCell(cell);
-        }
-
-        public void UseMissileAtCell(Cell center)
-        {
-            if (center == null) return;
-            if (!IsMissileArmed()) return;
-
-            var wlm = FindObjectOfType<WinLoseManager>();
-            if (wlm != null) wlm.BeginMissileGrace(0.35f);
-
-            missiles = Mathf.Max(0, missiles - 1);
-            int cx = center.x;
-            int cy = center.y;
-
-            for (int y = cy - 1; y <= cy + 1; y++)
-            {
-                for (int x = cx - 1; x <= cx + 1; x++)
-                {
-                    if (x < 0 || y < 0 || x >= width || y >= height) continue;
-                    bool wasMine = mines[x, y];
-                    mines[x, y] = false;
-                    var c = grid[x, y];
-                    if (c != null)
-                    {
-                        c.hasMine = false;
-                        if (wasMine)
-                            MissileHitFX.Spawn(c.transform.position);
-                    }
-                }
+                bool armed = board.IsMissileArmed();
+                missileIconImg.color = armed
+                    ? missileArmedColor
+                    : (m > 0 ? missileEnabledColor : missileDisabledColor);
             }
 
-            for (int y = cy - 2; y <= cy + 2; y++)
+            // visor
+            if (visorIconImg != null && visorCountTxt != null)
             {
-                for (int x = cx - 2; x <= cx + 2; x++)
-                {
-                    if (x < 0 || y < 0 || x >= width || y >= height) continue;
-                    near[x, y] = CountNear8(x, y);
-                }
+                int v = PlayerInventory.GetPulseVisorOwned();
+                visorCountTxt.text = "x" + v;
+
+                bool has = v > 0;
+                visorIconImg.color = has ? visorEnabledColor : visorDisabledColor;
+                visorCountTxt.color = has ? visorTextEnabledColor : visorTextDisabledColor;
             }
-
-            for (int y = cy - 1; y <= cy + 1; y++)
-            {
-                for (int x = cx - 1; x <= cx + 1; x++)
-                {
-                    if (x < 0 || y < 0 || x >= width || y >= height) continue;
-                    flagged[x, y] = false;
-                    var c = grid[x, y];
-                    if (c == null) continue;
-                    c.near = near[x, y];
-                    c.Open(false);
-
-                    int gained = (near[x, y] > 0) ? 1500 : 1000;
-                    score += gained;
-                    ScorePopupFX.Spawn(c.transform.position, gained);
-                }
-            }
-
-            missileArmed = false;
-        }
-
-        public void SetTheme(string themeId)
-        {
-            if (string.IsNullOrEmpty(themeId)) themeId = "grass";
-            currentTheme = themeId;
-
-            var tl = ThemeLibrary.GetTheme(themeId);
-            panelColorForHUD = tl.backplateColor;
-            accentColorForHUD = new Color(1f, 0.6f, 0.2f, 1f);
-        }
-
-        public int CountCorrectFlags()
-        {
-            int correct = 0;
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++)
-                {
-                    if (flagged[x, y] && mines[x, y])
-                        correct++;
-                }
-            }
-            return correct;
-        }
-
-        public void AddScore(int amount)
-        {
-            score += amount;
-        }
-
-        [System.Serializable]
-        public class ThemeDef
-        {
-            public string id;
-            public Sprite boardSprite;
-            public Color panelColor = new Color(0.07f, 0.09f, 0.11f, 1f);
-            public Color accentColor = new Color(0.1f, 0.6f, 0.9f, 1f);
         }
     }
 }
