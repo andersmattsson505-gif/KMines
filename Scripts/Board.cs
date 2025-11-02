@@ -228,18 +228,19 @@ namespace KMines
 
         public Cell WorldToCell(Vector3 worldPos)
         {
-            // vi vet att brädet är centrerat runt (0,0)
-            float localX = (worldPos.x) / tileSize + (width - 1) * 0.5f;
-            float localY = (worldPos.z) / tileSize + (height - 1) * 0.5f;
+            // world → board-lokal (din Board ligger på t.ex. z = -0.8f i Boot)
+            Vector3 local = worldPos - transform.position;
 
-            int x = Mathf.RoundToInt(localX);
-            int y = Mathf.RoundToInt(localY);
+            // dina celler ligger centrerat runt (0,0)
+            float localX = (local.x / tileSize) + (width - 1) * 0.5f;
+            float localY = (local.z / tileSize) + (height - 1) * 0.5f;
 
-            if (x < 0 || y < 0 || x >= width || y >= height)
-                return null;
+            int x = Mathf.Clamp(Mathf.RoundToInt(localX), 0, width - 1);
+            int y = Mathf.Clamp(Mathf.RoundToInt(localY), 0, height - 1);
 
             return grid[x, y];
         }
+
 
         public void ClickCell(Cell cell)
         {
