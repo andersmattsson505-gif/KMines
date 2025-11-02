@@ -1,7 +1,6 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
-using System.Reflection;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem.UI;
 #endif
@@ -103,12 +102,12 @@ namespace KMines
             smart.cam = cam;
             smart.rules = rules;
 
-            // --- GAMLA HUD:en (behövs för vissa script) ---
+            // --- GAMLA HUD:en ---
             var hudGO = new GameObject("KaelenHUD");
             var hud = hudGO.AddComponent<KaelenHUD>();
             TryAssignBoard(hud, board);
 
-            // --- MAIN CANVAS / se till att det finns en "Canvas" ---
+            // --- MAIN CANVAS ---
             Canvas targetCanvas = null;
             {
                 var all = FindObjectsOfType<Canvas>();
@@ -134,36 +133,13 @@ namespace KMines
                 }
             }
 
-            // --- BG: metall (läggs FÖRST i canvas) ---
-            {
-                var bgGo = new GameObject("BG_Metal", typeof(RectTransform), typeof(Image));
-                bgGo.transform.SetParent(targetCanvas.transform, false);
-
-                var bgRt = (RectTransform)bgGo.transform;
-                bgRt.anchorMin = Vector2.zero;
-                bgRt.anchorMax = Vector2.one;
-                bgRt.pivot = new Vector2(0.5f, 0.5f);
-                bgRt.offsetMin = Vector2.zero;
-                bgRt.offsetMax = Vector2.zero;
-
-                var bgImg = bgGo.GetComponent<Image>();
-                var spr = Resources.Load<Sprite>("Art/ui_bg/bg_metal_base");
-                if (spr) bgImg.sprite = spr;
-                bgImg.preserveAspect = false;
-                bgImg.color = Color.white;
-
-                // längst bak
-                bgGo.transform.SetAsFirstSibling();
-            }
-
-            // --- HUDTop (NY: visor + missile i samma rad) ---
+            // --- HUDTop ---
             var hudTopGO = new GameObject("HUDTop", typeof(RectTransform));
             hudTopGO.transform.SetParent(targetCanvas.transform, false);
             var hudTopRT = hudTopGO.GetComponent<RectTransform>();
             hudTopRT.anchorMin = new Vector2(0f, 1f);
             hudTopRT.anchorMax = new Vector2(1f, 1f);
             hudTopRT.pivot = new Vector2(0.5f, 1f);
-            // nu 120 px så den matchar HUDTop.cs
             hudTopRT.offsetMin = new Vector2(0f, -120f);
             hudTopRT.offsetMax = new Vector2(0f, 0f);
             var hudTop = hudTopGO.AddComponent<HUDTop>();
@@ -172,33 +148,17 @@ namespace KMines
             hudTop.gameTimer = gameTimer;
             hudTop.gameUI = gameUI;
 
-            // --- Visor Scan Effect (delas av HUDTop) ---
+            // --- Visor Scan Effect ---
             var visorScanGO = new GameObject("VisorScanEffect");
             var visorScan = visorScanGO.AddComponent<VisorScanEffect>();
             visorScan.board = board;
             hudTop.scanEffect = visorScan;
 
-            // --- TimerUI in i canvas så den syns ---
+            // --- TimerUI in i canvas ---
             timerUiGO.transform.SetParent(targetCanvas.transform, false);
-            timerUiGO.transform.SetAsLastSibling(); // ovanpå bakgrunden
+            timerUiGO.transform.SetAsLastSibling();
 
-            // --- OM INGA LEVELS: skapa 1 default ---
-            if (loader.levels == null || loader.levels.Length == 0)
-            {
-                loader.levels = new LevelDef[1];
-                loader.levels[0] = new LevelDef
-                {
-                    width = defaultWidth,
-                    height = defaultHeight,
-                    tileSize = defaultTileSize,
-                    mineDensity = defaultMineDensity,
-                    timed = defaultTimed,
-                    timeLimitSeconds = defaultTimeLimitSeconds
-                };
-                loader.currentIndex = 0;
-            }
-
-            // --- LÄS KONFIG FRÅN MENY ---
+            // --- LEVEL / SESSION CONFIG ---
             GameSessionConfig cfg;
             if (GameModeSettings.hasConfig)
             {
@@ -206,7 +166,22 @@ namespace KMines
             }
             else
             {
-                int idx = Mathf.Clamp(loader.currentIndex, 0, loader.levels.Length - 1);
+                int idx = Mathf.Clamp(loader.currentIndex, 0, loader.levels != null ? loader.levels.Length - 1 : 0);
+                if (loader.levels == null || loader.levels.Length == 0)
+                {
+                    loader.levels = new LevelDef[1];
+                    loader.levels[0] = new LevelDef
+                    {
+                        width = defaultWidth,
+                        height = defaultHeight,
+                        tileSize = defaultTileSize,
+                        mineDensity = defaultMineDensity,
+                        timed = defaultTimed,
+                        timeLimitSeconds = defaultTimeLimitSeconds
+                    };
+                    idx = 0;
+                }
+
                 cfg = new GameSessionConfig
                 {
                     mode = GameModeType.Campaign,
@@ -237,7 +212,7 @@ namespace KMines
             board.gameTimer = gameTimer;
             board.bonusPerSafeReveal = cfg.timeBonusPerSafeReveal;
 
-            // --- LÄGE ---
+            // --- APPLY MODE ---
             switch (cfg.mode)
             {
                 case GameModeType.Campaign:
@@ -249,7 +224,6 @@ namespace KMines
                     }
                 case GameModeType.Arcade:
                     {
-                        // vi tvingar 8x14 här
                         int w = 8;
                         int h = 14;
                         float dens = cfg.useCustomBoardSize ? cfg.customMineDensity : arcadeMineDensity;
@@ -299,6 +273,25 @@ namespace KMines
                     }
             }
 
+            // --- WORLD BG (metall bakom brädet) ---
+            {
+                // beräkna storlek av brädet
+                float wUnits = board.width * board.tileSize;
+                float hUnits = board.height * board.tileSize;
+
+                var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                quad.name = "BG_Metal_World";
+                quad.transform.position = new Vector3(0f, -0.02f, 0f);   // lite under rutorna
+                quad.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+                quad.transform.localScale = new Vector3(wUnits + 2f, hUnits + 2f, 1f); // lite marginal
+
+                var spr = Resources.Load<Sprite>("Art/ui_bg/bg_metal_base");
+                var mr = quad.GetComponent<MeshRenderer>();
+                var mat = new Material(Shader.Find("Unlit/Texture"));
+                if (spr) mat.mainTexture = spr.texture;
+                mr.sharedMaterial = mat;
+            }
+
             // --- VIEWPORT FITTER ---
             var fitGO = new GameObject("ViewportFitter");
             var fitter = fitGO.AddComponent<BoardViewportFitter>();
@@ -331,13 +324,13 @@ namespace KMines
 
             var t = targetComponent.GetType();
 
-            var f = t.GetField("board", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                 ?? t.GetField("Board", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            var f = t.GetField("board", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)
+                 ?? t.GetField("Board", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
             if (f != null && f.FieldType == typeof(Board))
                 f.SetValue(targetComponent, boardRef);
 
-            var p = t.GetProperty("board", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                 ?? t.GetProperty("Board", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            var p = t.GetProperty("board", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)
+                 ?? t.GetProperty("Board", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
             if (p != null && p.PropertyType == typeof(Board) && p.CanWrite)
                 p.SetValue(targetComponent, boardRef, null);
         }
