@@ -63,10 +63,11 @@ namespace KMines
 
             // --- BOARD ---
             var boardGO = new GameObject("Board");
+            // lite ner så vi får plats med top-bar
             boardGO.transform.position = new Vector3(0f, 0f, -0.8f);
             var board = boardGO.AddComponent<Board>();
 
-            // --- GAME UI ---
+            // --- GAME UI (win/lose) ---
             var uiGO = new GameObject("GameUI");
             var gameUI = uiGO.AddComponent<GameUI>();
             gameUI.SetBoard(board);
@@ -102,12 +103,12 @@ namespace KMines
             smart.cam = cam;
             smart.rules = rules;
 
-            // --- GAMLA HUD:en (för mått) ---
+            // --- GAMLA HUD:en (vi behåller den för mått / ev. text) ---
             var hudGO = new GameObject("KaelenHUD");
             var hud = hudGO.AddComponent<KaelenHUD>();
             TryAssignBoard(hud, board);
 
-            // --- HUVUD-CANVAS (scenen har redan en som heter "Canvas") ---
+            // --- MAIN CANVAS / se till att det finns en "Canvas" ---
             Canvas targetCanvas = null;
             {
                 var all = FindObjectsOfType<Canvas>();
@@ -119,6 +120,7 @@ namespace KMines
                         break;
                     }
                 }
+
                 if (targetCanvas == null && all.Length > 0)
                     targetCanvas = all[0];
 
@@ -132,29 +134,29 @@ namespace KMines
                 }
             }
 
-            // --- NY TOP-HUD (VISOR + MISSILE) ---
-            HUDTop hudTop = null;
-            {
-                // skapa med RectTransform DIREKT
-                var hudTopGO = new GameObject("HUDTop", typeof(RectTransform));
-                hudTopGO.transform.SetParent(targetCanvas.transform, false);
+            // --- HUDTop (NY: visor + missile i samma rad) ---
+            var hudTopGO = new GameObject("HUDTop", typeof(RectTransform));
+            hudTopGO.transform.SetParent(targetCanvas.transform, false);
+            var hudTopRT = hudTopGO.GetComponent<RectTransform>();
+            hudTopRT.anchorMin = new Vector2(0f, 1f);
+            hudTopRT.anchorMax = new Vector2(1f, 1f);
+            hudTopRT.pivot = new Vector2(0.5f, 1f);
+            // 96px hög bar
+            hudTopRT.offsetMin = new Vector2(0f, -96f);
+            hudTopRT.offsetMax = new Vector2(0f, 0f);
+            var hudTop = hudTopGO.AddComponent<HUDTop>();
+            hudTop.board = board;
+            hudTop.loader = loader;
+            hudTop.gameTimer = gameTimer;
+            hudTop.gameUI = gameUI;
 
-                var rt = hudTopGO.GetComponent<RectTransform>();
-                rt.anchorMin = new Vector2(0f, 1f);
-                rt.anchorMax = new Vector2(1f, 1f);
-                rt.pivot = new Vector2(0.5f, 1f);
-                rt.offsetMin = new Vector2(0f, -88f);
-                rt.offsetMax = new Vector2(0f, 0f);
-
-                hudTop = hudTopGO.AddComponent<HUDTop>();
-            }
-
-            // --- VISOR SCAN EFFECT ---
+            // --- Visor Scan Effect (delas av HUDTop) ---
             var visorScanGO = new GameObject("VisorScanEffect");
             var visorScan = visorScanGO.AddComponent<VisorScanEffect>();
             visorScan.board = board;
+            hudTop.scanEffect = visorScan;
 
-            // --- (BORTTAGET) ÄLDRE UI ---
+            // --- (BORTTAGET) gammal Missile UI / Visor UI ---
             // var missileUiGO = new GameObject("UI_Missile");
             // var missileUI = missileUiGO.AddComponent<MissileUI>();
             // TryAssignBoard(missileUI, board);
@@ -162,7 +164,7 @@ namespace KMines
             // var visorUI = visorUiGO.AddComponent<VisorUI>();
             // visorUI.scanEffect = visorScan;
 
-            // --- OM INGA LEVELS: skapa standard ---
+            // --- OM INGA LEVELS: skapa 1 default ---
             if (loader.levels == null || loader.levels.Length == 0)
             {
                 loader.levels = new LevelDef[1];
@@ -221,61 +223,62 @@ namespace KMines
             switch (cfg.mode)
             {
                 case GameModeType.Campaign:
-                    {
-                        int li = Mathf.Clamp(cfg.levelIndex, 0, loader.levels.Length - 1);
-                        loader.currentIndex = li;
-                        loader.LoadLevel(li);
-                        break;
-                    }
+                {
+                    int li = Mathf.Clamp(cfg.levelIndex, 0, loader.levels.Length - 1);
+                    loader.currentIndex = li;
+                    loader.LoadLevel(li);
+                    break;
+                }
                 case GameModeType.Arcade:
+                {
+                    // vi tvingar 8x14 här
+                    int w = 8;
+                    int h = 14;
+                    float dens = cfg.useCustomBoardSize ? cfg.customMineDensity : arcadeMineDensity;
+
+                    var arc = new LevelDef
                     {
-                        int w = 8;
-                        int h = 14;
-                        float dens = cfg.useCustomBoardSize ? cfg.customMineDensity : arcadeMineDensity;
+                        width = w,
+                        height = h,
+                        tileSize = defaultTileSize,
+                        mineDensity = dens,
+                        timed = cfg.timed,
+                        timeLimitSeconds = cfg.timeLimitSeconds
+                    };
 
-                        var arc = new LevelDef
-                        {
-                            width = w,
-                            height = h,
-                            tileSize = defaultTileSize,
-                            mineDensity = dens,
-                            timed = cfg.timed,
-                            timeLimitSeconds = cfg.timeLimitSeconds
-                        };
+                    loader.levels = new LevelDef[1] { arc };
+                    loader.currentIndex = 0;
+                    loader.LoadLevel(0);
 
-                        loader.levels = new LevelDef[1] { arc };
-                        loader.currentIndex = 0;
-                        loader.LoadLevel(0);
+                    board.SetMissilesEnabled(cfg.allowMissiles);
+                    board.SetTheme(finalTheme);
 
-                        board.SetMissilesEnabled(cfg.allowMissiles);
-                        board.SetTheme(finalTheme);
-
-                        if (cfg.timed)
-                            gameTimer.StartLevelTimer(true, cfg.timeLimitSeconds);
-                        break;
-                    }
+                    if (cfg.timed)
+                        gameTimer.StartLevelTimer(true, cfg.timeLimitSeconds);
+                    break;
+                }
                 case GameModeType.Boss:
+                {
+                    var boss = new LevelDef
                     {
-                        var boss = new LevelDef
-                        {
-                            width = bossWidth,
-                            height = bossHeight,
-                            tileSize = defaultTileSize,
-                            mineDensity = bossMineDensity,
-                            timed = true,
-                            timeLimitSeconds = (cfg.timeLimitSeconds > 0f ? cfg.timeLimitSeconds : bossTimeLimitSeconds)
-                        };
+                        width = bossWidth,
+                        height = bossHeight,
+                        tileSize = defaultTileSize,
+                        mineDensity = bossMineDensity,
+                        timed = true,
+                        timeLimitSeconds = (cfg.timeLimitSeconds > 0f ? cfg.timeLimitSeconds : bossTimeLimitSeconds)
+                    };
 
-                        loader.levels = new LevelDef[1] { boss };
-                        loader.currentIndex = 0;
-                        loader.LoadLevel(0);
+                    loader.levels = new LevelDef[1] { boss };
+                    loader.currentIndex = 0;
+                    loader.LoadLevel(0);
 
-                        board.SetMissilesEnabled(false);
-                        board.SetTheme(finalTheme);
+                    board.SetMissilesEnabled(false);
+                    board.SetTheme(finalTheme);
 
-                        gameTimer.StartLevelTimer(true, boss.timeLimitSeconds);
-                        break;
-                    }
+                    gameTimer.StartLevelTimer(true, boss.timeLimitSeconds);
+                    break;
+                }
             }
 
             // --- VIEWPORT FITTER ---
