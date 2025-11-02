@@ -72,7 +72,7 @@ namespace KMines
             // Canvas
             canvas = gameObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 20000; // under GameUI (50000), över brädet
+            canvas.sortingOrder = 20000; // under GameUI (50000), Ã¶ver brÃ¤det
 
             var scaler = gameObject.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -283,7 +283,7 @@ namespace KMines
                 txtRT.anchorMax = new Vector2(1f, 1f);
                 txtRT.pivot = new Vector2(1f, 1f);
                 txtRT.sizeDelta = new Vector2(120f, 32f);
-                txtRT.anchoredPosition = new Vector2(-28f, +90f);
+                txtRT.anchoredPosition = new Vector2(-40f, 0f);
             }
 
             // ----- Visor row -----
@@ -350,11 +350,11 @@ namespace KMines
         {
             if (board == null) return;
 
-            // redan armerad? gör inget (Board disarmar efter skott)
+            // redan armerad? gÃ¶r inget (Board disarmar efter skott)
             if (board.IsMissileArmed())
                 return;
 
-            // slut på missiler? gör inget
+            // slut pÃ¥ missiler? gÃ¶r inget
             if (board.MissileCount() <= 0)
                 return;
 
@@ -368,7 +368,7 @@ namespace KMines
             bool ok = PlayerInventory.TryConsumePulseVisor();
             if (!ok) return;
 
-            // kör scaneffekt
+            // kÃ¶r scaneffekt
             if (scanEffect != null)
             {
                 scanEffect.PulseRadarSweep();
@@ -388,7 +388,7 @@ namespace KMines
         }
 
         // -------------------------------------------------
-        // LateUpdate = vi uppdaterar text/räknare varje frame
+        // LateUpdate = vi uppdaterar text/rÃ¤knare varje frame
         // -------------------------------------------------
         void LateUpdate()
         {
