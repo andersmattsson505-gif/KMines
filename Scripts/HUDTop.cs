@@ -24,8 +24,7 @@ namespace KMines
         public int countFontSize = 44;
 
         [Header("Colors")]
-        public Color topBarColor = new Color(0.05f, 0.06f, 0.08f, 1f);
-        public Color buttonColor = new Color(0.65f, 0.65f, 0.8f, 1f);
+        public Color topBarColor = new Color(0f, 0f, 0f, 0f);     // transparent nu
         public Color missileEnabledColor = Color.white;
         public Color missileDisabledColor = new Color(1f, 1f, 1f, 0.25f);
         public Color missileArmedColor = new Color(1f, 0.75f, 0.35f, 1f);
@@ -69,7 +68,7 @@ namespace KMines
             rt.offsetMin = new Vector2(0f, -topBarHeight);
             rt.offsetMax = new Vector2(0f, 0f);
 
-            // BG
+            // BG (osynlig men tar ytan)
             var bg = new GameObject("BG", typeof(Image));
             bg.transform.SetParent(rt, false);
             var bgRT = bg.GetComponent<RectTransform>();
@@ -77,9 +76,9 @@ namespace KMines
             bgRT.anchorMax = Vector2.one;
             bgRT.offsetMin = Vector2.zero;
             bgRT.offsetMax = Vector2.zero;
-            bg.GetComponent<Image>().color = new Color(0,0,0,0);
+            bg.GetComponent<Image>().color = topBarColor;
 
-            // MENU
+            // MENU (hamburger)
             {
                 var btn = new GameObject("MenuButton", typeof(RectTransform), typeof(Image), typeof(Button));
                 btn.transform.SetParent(rt, false);
@@ -89,7 +88,32 @@ namespace KMines
                 brt.pivot = new Vector2(0f, 1f);
                 brt.sizeDelta = new Vector2(60f, 60f);
                 brt.anchoredPosition = new Vector2(14f, -14f);
-                btn.GetComponent<Image>().color = buttonColor;
+
+                // osynlig bakgrund
+                var bImg = btn.GetComponent<Image>();
+                bImg.color = new Color(1f, 1f, 1f, 0f);
+                bImg.raycastTarget = true;
+
+                // tre linjer
+                float lineWidth = 32f;
+                float lineHeight = 4f;
+                float gap = 8f;
+                float startY = 10f;
+
+                for (int i = 0; i < 3; i++)
+                {
+                    var line = new GameObject("Line" + i, typeof(RectTransform), typeof(Image));
+                    line.transform.SetParent(btn.transform, false);
+                    var lrt = line.GetComponent<RectTransform>();
+                    lrt.anchorMin = new Vector2(0.5f, 0.5f);
+                    lrt.anchorMax = new Vector2(0.5f, 0.5f);
+                    lrt.pivot = new Vector2(0.5f, 0.5f);
+                    lrt.sizeDelta = new Vector2(lineWidth, lineHeight);
+                    lrt.anchoredPosition = new Vector2(0f, startY - i * (lineHeight + gap));
+                    var limg = line.GetComponent<Image>();
+                    limg.color = new Color(0.9f, 0.95f, 1f, 1f);
+                }
+
                 btn.GetComponent<Button>().onClick.AddListener(OnMenuClicked);
             }
 
@@ -112,7 +136,7 @@ namespace KMines
                 brt.anchorMax = new Vector2(1f, 0.5f);
                 brt.pivot = new Vector2(1f, 0.5f);
                 brt.sizeDelta = new Vector2(hitSize, hitSize);
-                brt.anchoredPosition = new Vector2( -100f, 0f);
+                brt.anchoredPosition = new Vector2(-100f, 0f);
 
                 var bImg = btn.GetComponent<Image>();
                 bImg.color = new Color(1f, 1f, 1f, 0f);
@@ -148,8 +172,7 @@ namespace KMines
                 trt.anchorMax = new Vector2(0f, 0.5f);
                 trt.pivot = new Vector2(1f, 0.5f);
                 trt.sizeDelta = new Vector2(72f, 50f);
-                // FLYTTAT: hela ikonen + 16 px
-                trt.anchoredPosition = new Vector2(-(iconSize + -230f), 0f);
+                trt.anchoredPosition = new Vector2(-230f, 0f);   // du sa -230f
             }
 
             // VISOR
@@ -197,8 +220,7 @@ namespace KMines
                 trt.anchorMax = new Vector2(0f, 0.5f);
                 trt.pivot = new Vector2(1f, 0.5f);
                 trt.sizeDelta = new Vector2(72f, 50f);
-                // FLYTTAT lika som missile
-                trt.anchoredPosition = new Vector2(-(iconSize + -230f), 0f);
+                trt.anchoredPosition = new Vector2(-230f, 0f);   // samma här
             }
         }
 
@@ -233,6 +255,7 @@ namespace KMines
 
         void Update()
         {
+            // missile
             if (board != null && missileIconImg != null && missileCountTxt != null)
             {
                 int m = board.MissileCount();
@@ -244,6 +267,7 @@ namespace KMines
                     : (m > 0 ? missileEnabledColor : missileDisabledColor);
             }
 
+            // visor
             if (visorIconImg != null && visorCountTxt != null)
             {
                 int v = PlayerInventory.GetPulseVisorOwned();
@@ -256,5 +280,3 @@ namespace KMines
         }
     }
 }
-
-
