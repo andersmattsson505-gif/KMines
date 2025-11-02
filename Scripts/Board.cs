@@ -7,26 +7,18 @@ namespace KMines
     [DefaultExecutionOrder(-1000)]
     public class Board : MonoBehaviour
     {
-        // -------------------------------------------------
-        // Layout / data (det som Boot & LevelLoader förväntar sig)
-        // -------------------------------------------------
         [Header("Layout")]
         public int width = 9;
         public int height = 15;
-        [Tooltip("Storlek på 1 ruta i world units")]
         public float tileSize = 1.0f;
-        [Tooltip("Positivt värde flyttar hela rutnätet NER på skärmen (i +Z)")]
-        public float verticalGridOffset = 0.5f;   // i "rutor"
+        public float verticalGridOffset = 0.5f;
 
         [Header("Mines")]
-        [Tooltip("0.16 = 16% av rutorna blir minor")]
         public float mineDensity = 0.16f;
 
         [Header("Visuals")]
-        [Tooltip("Om tomma laddas från Resources/Art/…")]
         public Texture2D closedTex;
         public Texture2D openTex;
-        [Tooltip("Root att lägga alla celler under. Om null används detta GameObject.")]
         public Transform cellRoot;
 
         [Header("Score")]
@@ -40,22 +32,18 @@ namespace KMines
         public List<ThemeDef> themes = new List<ThemeDef>();
         string currentTheme = "grass";
 
-        // runtime-speldata
         public Cell[,] grid;
         public bool[,] mines;
         public bool[,] flagged;
         public int[,] near;
 
-        // missiles / energy
         int missiles;
         bool missileArmed;
         bool missilesEnabled = true;
 
-        // timer-koppling
         [HideInInspector] public GameTimer gameTimer;
         [HideInInspector] public float bonusPerSafeReveal = 0f;
 
-        // HUD-färger
         [HideInInspector] public Color panelColorForHUD = new Color(0.07f, 0.09f, 0.11f, 1f);
         [HideInInspector] public Color accentColorForHUD = new Color(0.1f, 0.6f, 0.9f, 1f);
 
@@ -72,22 +60,16 @@ namespace KMines
             Build();
         }
 
-        // -------------------------------------------------
-        // BYGG BRÄDE
-        // -------------------------------------------------
         public void Build()
         {
-            // 1) laddning av standard-texturer
             if (closedTex == null) closedTex = Resources.Load<Texture2D>("Art/tile_closed");
             if (openTex == null) openTex = Resources.Load<Texture2D>("Art/tile_open");
 
-            // 2) skapa arrayer
             grid = new Cell[width, height];
             mines = new bool[width, height];
             flagged = new bool[width, height];
             near = new int[width, height];
 
-            // 3) rensa gamla celler
             if (cellRoot != null)
             {
                 for (int i = cellRoot.childCount - 1; i >= 0; i--)
@@ -102,18 +84,12 @@ namespace KMines
                 }
             }
 
-            // 4) räkna ut hur många minor vi ska ha från density
             int mineCount = Mathf.RoundToInt(width * height * Mathf.Clamp01(mineDensity));
             PlaceMinesRandom(mineCount);
-
-            // 5) räkna antal runt
             RecalcNear();
 
-            // 6) skapa alla celler
             float offX = -(width - 1) * 0.5f * tileSize;
             float offZ = -(height - 1) * 0.5f * tileSize;
-
-            // vår extra-offset (i rutor → world)
             float worldOffsetZ = verticalGridOffset * tileSize;
 
             for (int y = 0; y < height; y++)
@@ -123,7 +99,7 @@ namespace KMines
                     Vector3 pos = new Vector3(
                         offX + x * tileSize,
                         0f,
-                        offZ + y * tileSize - worldOffsetZ   // flytta allt lite ner
+                        offZ + y * tileSize - worldOffsetZ
                     );
 
                     var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -131,7 +107,13 @@ namespace KMines
                     go.transform.SetParent(cellRoot, false);
                     go.transform.localPosition = pos;
                     go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-                    go.transform.localScale = Vector3.one;
+
+                    // VISUELL skala – bara lite mindre på RIKTIG mobil
+                    float visualScale = tileSize;
+                    if (Application.isMobilePlatform)
+                        visualScale = tileSize * 0.95f;
+
+                    go.transform.localScale = new Vector3(visualScale, visualScale, 1f);
 
                     var col = go.GetComponent<Collider>();
                     if (col) Destroy(col);
@@ -144,12 +126,10 @@ namespace KMines
                 }
             }
 
-            // 7) missiles
             if (missilesEnabled) missiles = startMissiles;
             else missiles = 0;
             missileArmed = false;
 
-            // 8) score reset
             score = 0;
             firstClickDone = false;
         }
@@ -195,9 +175,6 @@ namespace KMines
             return cnt;
         }
 
-        // -------------------------------------------------
-        // INPUT API
-        // -------------------------------------------------
         public void ClickAt(Vector3 worldPos)
         {
             var cell = WorldToCell(worldPos);
@@ -217,11 +194,7 @@ namespace KMines
 
         public Cell WorldToCell(Vector3 worldPos)
         {
-            // world → lokalt mot brädet
             Vector3 local = worldPos - transform.position;
-
-            // vi sänkte alla rutor i Build() med (verticalGridOffset * tileSize)
-            // därför måste vi lägga tillbaka det här innan vi räknar index
             float correctedZ = local.z + (verticalGridOffset * tileSize);
 
             float localX = (local.x / tileSize) + (width - 1) * 0.5f;
@@ -231,7 +204,6 @@ namespace KMines
             int y = Mathf.Clamp(Mathf.RoundToInt(localY), 0, height - 1);
             return grid[x, y];
         }
-
 
         public void ClickCell(Cell cell)
         {
@@ -281,7 +253,7 @@ namespace KMines
 
         void RevealFrom4(int sx, int sy)
         {
-            Queue<Vector2Int> q = new Queue<Vector2Int>();
+            var q = new Queue<Vector2Int>();
             q.Enqueue(new Vector2Int(sx, sy));
 
             while (q.Count > 0)
@@ -315,16 +287,10 @@ namespace KMines
             }
         }
 
-        // -------------------------------------------------
-        // MISSILE-API
-        // -------------------------------------------------
         public int MissileCount() => missiles;
         public bool IsMissileArmed() => missileArmed && missiles > 0;
 
-        public void SetMissilesEnabled(bool enabled)
-        {
-            missilesEnabled = enabled;
-        }
+        public void SetMissilesEnabled(bool enabled) => missilesEnabled = enabled;
 
         public void ArmMissile()
         {
@@ -363,9 +329,7 @@ namespace KMines
                     {
                         c.hasMine = false;
                         if (wasMine)
-                        {
                             MissileHitFX.Spawn(c.transform.position);
-                        }
                     }
                 }
             }
@@ -399,9 +363,6 @@ namespace KMines
             missileArmed = false;
         }
 
-        // -------------------------------------------------
-        // Tema
-        // -------------------------------------------------
         public void SetTheme(string themeId)
         {
             if (string.IsNullOrEmpty(themeId)) themeId = "grass";
@@ -412,9 +373,6 @@ namespace KMines
             accentColorForHUD = new Color(1f, 0.6f, 0.2f, 1f);
         }
 
-        // -------------------------------------------------
-        // Hjälpare för WinLoseManager
-        // -------------------------------------------------
         public int CountCorrectFlags()
         {
             int correct = 0;
