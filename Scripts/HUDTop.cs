@@ -16,7 +16,7 @@ namespace KMines
 
         [Header("Layout")]
         public float topBarHeight = 120f;
-        public float sideGutterWidth = 68f;   // <-- tillbaka pga Boot.cs
+        public float sideGutterWidth = 68f;
 
         [Header("Sizes")]
         public float hitSize = 110f;
@@ -69,7 +69,7 @@ namespace KMines
             rt.offsetMin = new Vector2(0f, -topBarHeight);
             rt.offsetMax = new Vector2(0f, 0f);
 
-            // bg
+            // BG
             var bg = new GameObject("BG", typeof(Image));
             bg.transform.SetParent(rt, false);
             var bgRT = bg.GetComponent<RectTransform>();
@@ -79,7 +79,7 @@ namespace KMines
             bgRT.offsetMax = Vector2.zero;
             bg.GetComponent<Image>().color = topBarColor;
 
-            // menu
+            // MENU
             {
                 var btn = new GameObject("MenuButton", typeof(RectTransform), typeof(Image), typeof(Button));
                 btn.transform.SetParent(rt, false);
@@ -93,7 +93,7 @@ namespace KMines
                 btn.GetComponent<Button>().onClick.AddListener(OnMenuClicked);
             }
 
-            // right cluster
+            // RIGHT CLUSTER
             var cluster = new GameObject("RightCluster", typeof(RectTransform));
             cluster.transform.SetParent(rt, false);
             var cr = cluster.GetComponent<RectTransform>();
@@ -103,7 +103,7 @@ namespace KMines
             cr.sizeDelta = new Vector2(460f, topBarHeight);
             cr.anchoredPosition = new Vector2(-12f, 0f);
 
-            // MISSILE (samma struktur som visor)
+            // MISSILE
             {
                 var btn = new GameObject("MissileButton", typeof(RectTransform), typeof(Image), typeof(Button));
                 btn.transform.SetParent(cr, false);
@@ -112,7 +112,7 @@ namespace KMines
                 brt.anchorMax = new Vector2(1f, 0.5f);
                 brt.pivot = new Vector2(1f, 0.5f);
                 brt.sizeDelta = new Vector2(hitSize, hitSize);
-                brt.anchoredPosition = new Vector2(-20f, 0f);
+                brt.anchoredPosition = new Vector2( -100f, 0f);
 
                 var bImg = btn.GetComponent<Image>();
                 bImg.color = new Color(1f, 1f, 1f, 0f);
@@ -148,7 +148,8 @@ namespace KMines
                 trt.anchorMax = new Vector2(0f, 0.5f);
                 trt.pivot = new Vector2(1f, 0.5f);
                 trt.sizeDelta = new Vector2(72f, 50f);
-                trt.anchoredPosition = new Vector2(-(iconSize * 0.5f) - 8f, 0f);
+                // FLYTTAT: hela ikonen + 16 px
+                trt.anchoredPosition = new Vector2(-(iconSize + -230f), 0f);
             }
 
             // VISOR
@@ -160,7 +161,7 @@ namespace KMines
                 brt.anchorMax = new Vector2(1f, 0.5f);
                 brt.pivot = new Vector2(1f, 0.5f);
                 brt.sizeDelta = new Vector2(hitSize, hitSize);
-                brt.anchoredPosition = new Vector2(-(20f + hitSize + 20f), 0f);
+                brt.anchoredPosition = new Vector2(-(20f + hitSize + 150f), 0f);
 
                 var bImg = btn.GetComponent<Image>();
                 bImg.color = new Color(1f, 1f, 1f, 0f);
@@ -196,7 +197,8 @@ namespace KMines
                 trt.anchorMax = new Vector2(0f, 0.5f);
                 trt.pivot = new Vector2(1f, 0.5f);
                 trt.sizeDelta = new Vector2(72f, 50f);
-                trt.anchoredPosition = new Vector2(-(iconSize * 0.5f) - 8f, 0f);
+                // FLYTTAT lika som missile
+                trt.anchoredPosition = new Vector2(-(iconSize + -230f), 0f);
             }
         }
 
@@ -231,7 +233,6 @@ namespace KMines
 
         void Update()
         {
-            // missile
             if (board != null && missileIconImg != null && missileCountTxt != null)
             {
                 int m = board.MissileCount();
@@ -243,7 +244,6 @@ namespace KMines
                     : (m > 0 ? missileEnabledColor : missileDisabledColor);
             }
 
-            // visor
             if (visorIconImg != null && visorCountTxt != null)
             {
                 int v = PlayerInventory.GetPulseVisorOwned();
