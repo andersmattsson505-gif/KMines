@@ -15,7 +15,7 @@ namespace KMines
         public VisorScanEffect scanEffect;
 
         [Header("Layout")]
-        public float topBarHeight = 120f;
+        public float topBarHeight = 140f;      // matchar Boot
         public float sideGutterWidth = 68f;
 
         [Header("Sizes")]
@@ -24,7 +24,7 @@ namespace KMines
         public int countFontSize = 44;
 
         [Header("Colors")]
-        public Color topBarColor = new Color(0f, 0f, 0f, 0f);     // transparent nu
+        public Color topBarColor = new Color(0f, 0f, 0f, 0f);     // transparent
         public Color missileEnabledColor = Color.white;
         public Color missileDisabledColor = new Color(1f, 1f, 1f, 0.25f);
         public Color missileArmedColor = new Color(1f, 0.75f, 0.35f, 1f);
@@ -68,7 +68,7 @@ namespace KMines
             rt.offsetMin = new Vector2(0f, -topBarHeight);
             rt.offsetMax = new Vector2(0f, 0f);
 
-            // BG (osynlig men tar ytan)
+            // BG (osynlig)
             var bg = new GameObject("BG", typeof(Image));
             bg.transform.SetParent(rt, false);
             var bgRT = bg.GetComponent<RectTransform>();
@@ -78,7 +78,7 @@ namespace KMines
             bgRT.offsetMax = Vector2.zero;
             bg.GetComponent<Image>().color = topBarColor;
 
-            // MENU (hamburger)
+            // MENU (hamburger) – sänkt ~36px extra
             {
                 var btn = new GameObject("MenuButton", typeof(RectTransform), typeof(Image), typeof(Button));
                 btn.transform.SetParent(rt, false);
@@ -87,14 +87,12 @@ namespace KMines
                 brt.anchorMax = new Vector2(0f, 1f);
                 brt.pivot = new Vector2(0f, 1f);
                 brt.sizeDelta = new Vector2(60f, 60f);
-                brt.anchoredPosition = new Vector2(14f, -14f);
+                brt.anchoredPosition = new Vector2(14f, -50f);
 
-                // osynlig bakgrund
                 var bImg = btn.GetComponent<Image>();
                 bImg.color = new Color(1f, 1f, 1f, 0f);
                 bImg.raycastTarget = true;
 
-                // tre linjer
                 float lineWidth = 32f;
                 float lineHeight = 4f;
                 float gap = 8f;
@@ -117,7 +115,7 @@ namespace KMines
                 btn.GetComponent<Button>().onClick.AddListener(OnMenuClicked);
             }
 
-            // RIGHT CLUSTER
+            // RIGHT CLUSTER – sänkt ca 35px
             var cluster = new GameObject("RightCluster", typeof(RectTransform));
             cluster.transform.SetParent(rt, false);
             var cr = cluster.GetComponent<RectTransform>();
@@ -125,7 +123,7 @@ namespace KMines
             cr.anchorMax = new Vector2(1f, 1f);
             cr.pivot = new Vector2(1f, 1f);
             cr.sizeDelta = new Vector2(460f, topBarHeight);
-            cr.anchoredPosition = new Vector2(-12f, 0f);
+            cr.anchoredPosition = new Vector2(-12f, -35f);
 
             // MISSILE
             {
@@ -172,7 +170,7 @@ namespace KMines
                 trt.anchorMax = new Vector2(0f, 0.5f);
                 trt.pivot = new Vector2(1f, 0.5f);
                 trt.sizeDelta = new Vector2(72f, 50f);
-                trt.anchoredPosition = new Vector2(130f, 0f);   // du sa -230f
+                trt.anchoredPosition = new Vector2(130f, 0f);   // din justering
             }
 
             // VISOR
@@ -220,7 +218,7 @@ namespace KMines
                 trt.anchorMax = new Vector2(0f, 0.5f);
                 trt.pivot = new Vector2(1f, 0.5f);
                 trt.sizeDelta = new Vector2(72f, 50f);
-                trt.anchoredPosition = new Vector2(140f, 0f);   // samma här
+                trt.anchoredPosition = new Vector2(140f, 0f);   // din justering
             }
         }
 
