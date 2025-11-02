@@ -108,7 +108,7 @@ namespace KMines
             var hud = hudGO.AddComponent<KaelenHUD>();
             TryAssignBoard(hud, board);
 
-            // --- MAIN CANVAS / se till att det finns en "Canvas" ---
+            // --- MAIN CANVAS ---
             Canvas targetCanvas = null;
             {
                 var all = FindObjectsOfType<Canvas>();
@@ -134,30 +134,32 @@ namespace KMines
                 }
             }
 
-            // --- HUDTop (visor + missile) ---
+            // --- HUDTop ---
             var hudTopGO = new GameObject("HUDTop", typeof(RectTransform));
             hudTopGO.transform.SetParent(targetCanvas.transform, false);
             var hudTopRT = hudTopGO.GetComponent<RectTransform>();
             hudTopRT.anchorMin = new Vector2(0f, 1f);
             hudTopRT.anchorMax = new Vector2(1f, 1f);
             hudTopRT.pivot = new Vector2(0.5f, 1f);
-            hudTopRT.offsetMin = new Vector2(0f, -120f);
+            // högre topp för mobil
+            hudTopRT.offsetMin = new Vector2(0f, -140f);
             hudTopRT.offsetMax = new Vector2(0f, 0f);
             var hudTop = hudTopGO.AddComponent<HUDTop>();
             hudTop.board = board;
             hudTop.loader = loader;
             hudTop.gameTimer = gameTimer;
             hudTop.gameUI = gameUI;
+            hudTop.topBarHeight = 140f;   // så HUDTop vet samma siffra
 
-            // --- Visor Scan Effect (delas av HUDTop) ---
+            // --- Visor Scan Effect ---
             var visorScanGO = new GameObject("VisorScanEffect");
             var visorScan = visorScanGO.AddComponent<VisorScanEffect>();
             visorScan.board = board;
             hudTop.scanEffect = visorScan;
 
-            // --- TimerUI in i canvas så den syns ---
+            // --- TimerUI in i canvas ---
             timerUiGO.transform.SetParent(targetCanvas.transform, false);
-            timerUiGO.transform.SetAsLastSibling(); // ovanpå
+            timerUiGO.transform.SetAsLastSibling();
 
             // --- OM INGA LEVELS: skapa 1 default ---
             if (loader.levels == null || loader.levels.Length == 0)
@@ -283,10 +285,9 @@ namespace KMines
 
                 var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
                 quad.name = "BG_Metal_World";
-                quad.transform.position = new Vector3(0f, -0.02f, 0f);   // lite under rutorna
+                quad.transform.position = new Vector3(0f, -0.02f, 0f);
                 quad.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
 
-                // ge den lite extra höjd så inget svart syns längst ner
                 float extraHeight = 4f;
                 quad.transform.localScale = new Vector3(
                     wUnits + 2f,
@@ -299,11 +300,9 @@ namespace KMines
                 var mat = new Material(Shader.Find("Unlit/Texture"));
                 if (spr) mat.mainTexture = spr.texture;
 
-                // rita först, bakom allt annat
                 mat.renderQueue = 1000;
                 mr.sharedMaterial = mat;
             }
-
 
             // --- VIEWPORT FITTER ---
             var fitGO = new GameObject("ViewportFitter");
@@ -311,22 +310,15 @@ namespace KMines
             fitter.cam = cam;
             fitter.board = board;
 
-            if (hudTop != null)
-            {
-                fitter.uiTopPx = hudTop.topBarHeight;
-                fitter.uiLeftPx = hudTop.sideGutterWidth;
-                fitter.uiRightPx = hudTop.sideGutterWidth;
-            }
-            else
-            {
-                fitter.uiTopPx = hud.topBarHeight;
-                fitter.uiLeftPx = hud.sideGutterWidth;
-                fitter.uiRightPx = hud.sideGutterWidth;
-            }
-
+            // vi vet att vi satte 140 px på HUDTop
+            fitter.uiTopPx = 140f;
+            fitter.uiLeftPx = 68f;
+            fitter.uiRightPx = 68f;
             fitter.uiBottomPx = 0f;
+
             fitter.referenceResolution = new Vector2(1080f, 1920f);
-            fitter.extraWorldPadding = 0.20f;
+            // mer luft för mobil
+            fitter.extraWorldPadding = 0.40f;
             fitter.updateEveryFrame = true;
             fitter.FitNow();
         }
